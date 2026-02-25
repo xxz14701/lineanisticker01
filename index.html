@@ -112,7 +112,19 @@
                     </button>
                 </div>
 
-                <!-- 第三排：刪除 -->
+                <!-- 第三排：翻轉 -->
+                <div id="flipBtns" class="grid grid-cols-2 gap-3 opacity-30 pointer-events-none">
+                    <button onclick="flipSelected('H')" class="action-btn flex flex-col items-center justify-center p-3 bg-blue-50 border-2 border-blue-200 rounded-2xl gap-1">
+                        <span class="text-3xl">↔️</span>
+                        <span class="font-bold text-base text-blue-700">水平翻轉</span>
+                    </button>
+                    <button onclick="flipSelected('V')" class="action-btn flex flex-col items-center justify-center p-3 bg-purple-50 border-2 border-purple-200 rounded-2xl gap-1">
+                        <span class="text-3xl">↕️</span>
+                        <span class="font-bold text-base text-purple-700">垂直翻轉</span>
+                    </button>
+                </div>
+
+                <!-- 第四排：刪除 -->
                 <button onclick="deleteSelected()" id="deleteBtn" class="action-btn flex items-center justify-center p-3 bg-gray-100 border-2 border-gray-200 rounded-2xl gap-3 opacity-30" disabled>
                     <span class="text-3xl">🗑️</span>
                     <span class="font-bold text-lg">刪除選中的物件</span>
@@ -267,7 +279,10 @@
                 targetCtx.save();
                 targetCtx.translate(obj.x, obj.y);
                 targetCtx.rotate(obj.rotation * Math.PI / 180);
-                targetCtx.scale(obj.scale, obj.scale);
+                targetCtx.scale(
+                    obj.scale * (obj.flipH ? -1 : 1),
+                    obj.scale * (obj.flipV ? -1 : 1)
+                );
 
                 let w = 80, h = 80;
                 if (obj.type === 'image') { w = obj.w; h = obj.h; }
@@ -388,8 +403,14 @@
         function onMouseUp() { isDragging = false; isResizing = false; }
         function updateUIState() {
             const delBtn = document.getElementById('deleteBtn');
-            delBtn.disabled = selectedObjectIndex === -1;
-            delBtn.style.opacity = selectedObjectIndex === -1 ? "0.3" : "1";
+            const flipBtns = document.getElementById('flipBtns');
+            const hasObj = selectedObjectIndex !== -1;
+            delBtn.disabled = !hasObj;
+            delBtn.style.opacity = hasObj ? "1" : "0.3";
+            if (flipBtns) {
+                flipBtns.style.opacity = hasObj ? "1" : "0.3";
+                flipBtns.style.pointerEvents = hasObj ? "auto" : "none";
+            }
         }
 
         const SPEED_PRESETS = [
@@ -627,6 +648,13 @@
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
+        }
+        function flipSelected(dir) {
+            if (selectedObjectIndex === -1) return;
+            const obj = frames[currentFrameIndex].objects[selectedObjectIndex];
+            if (dir === 'H') obj.flipH = !obj.flipH;
+            else             obj.flipV = !obj.flipV;
+            draw();
         }
         function deleteSelected() { if (selectedObjectIndex === -1) return; frames[currentFrameIndex].objects.splice(selectedObjectIndex, 1); selectedObjectIndex = -1; updateUIState(); draw(); }
 
