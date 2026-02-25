@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>動態貼圖製作大師 - 導出功能增強版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 APNG 與 GIF 處理庫 -->
+    <script src="UPNG.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
+    <script src="gif.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #F3F4F6;
+            overscroll-behavior: none;
+            user-select: none;
+        }
+
+        .canvas-container {
+            width: 370px;
+            height: 320px;
+            background-image: linear-gradient(45deg, #e5e5e5 25%, transparent 25%), 
+                              linear-gradient(-45deg, #e5e5e5 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #e5e5e5 75%), 
+                              linear-gradient(-45deg, transparent 75%, #e5e5e5 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            position: relative;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            touch-action: none;
+        }
+
+        .frame-card {
+            min-width: 80px;
+            height: 80px;
+            transition: all 0.2s;
+        }
+
+        .frame-card.active {
+            border-color: #EF4444;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+        }
+
+        .action-btn:active {
+            transform: scale(0.92);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        #loadingOverlay {
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="p-0 m-0">
+
+    <div class="max-w-md mx-auto bg-white min-h-screen flex flex-col shadow-2xl relative">
+        
+        <!-- Header -->
+        <header class="bg-red-500 text-white p-4 flex justify-between items-center shrink-0">
+            <h1 class="text-2xl font-bold tracking-tight">動態貼圖大師</h1>
+            <button onclick="previewAnimation()" id="previewBtn" class="bg-white text-red-500 px-4 py-1 rounded-full font-bold shadow-md action-btn">預覽播放</button>
+        </header>
+
+        <!-- Main Canvas Area -->
+        <div class="flex-1 flex flex-col items-center justify-center p-4 gap-4 bg-gray-50">
+            
+            <div id="canvasBox" class="canvas-container bg-white border-4 border-white rounded-lg overflow-hidden">
+                <canvas id="mainCanvas" width="370" height="320"></canvas>
+            </div>
+
+            <div class="text-center text-sm text-gray-500 font-medium">
+                💡 拖移物件位置，按住<span class="text-blue-500 font-bold">藍圈</span>旋轉縮放
+            </div>
+
+            <!-- Frame Timeline -->
+            <div class="w-full">
+                <div class="flex justify-between items-center mb-2 px-2">
+                    <span class="font-bold text-gray-700 text-lg">動畫步驟</span>
+                    <button onclick="addFrame()" class="text-blue-600 font-bold text-lg">+ 新增步驟</button>
+                </div>
+                <div id="frameList" class="flex gap-3 overflow-x-auto p-2 no-scrollbar">
+                    <!-- Frames -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="bg-white border-t border-gray-200 p-4 shrink-0 pb-8">
+            <div id="panel-add" class="grid grid-cols-2 gap-3">
+                <button onclick="promptAddText()" class="action-btn flex flex-col items-center justify-center p-4 bg-yellow-50 border-2 border-yellow-200 rounded-2xl gap-2">
+                    <span class="text-4xl">✍️</span>
+                    <span class="font-bold text-lg">寫文字</span>
+                </button>
+                <button onclick="addSticker('❤️')" class="action-btn flex flex-col items-center justify-center p-4 bg-pink-50 border-2 border-pink-200 rounded-2xl gap-2">
+                    <span class="text-4xl">❤️</span>
+                    <span class="font-bold text-lg">加愛心</span>
+                </button>
+                <button onclick="addSticker('🌟')" class="action-btn flex flex-col items-center justify-center p-4 bg-orange-50 border-2 border-orange-200 rounded-2xl gap-2">
+                    <span class="text-4xl">🌟</span>
+                    <span class="font-bold text-lg">加星星</span>
+                </button>
+                <button onclick="deleteSelected()" id="deleteBtn" class="action-btn flex flex-col items-center justify-center p-4 bg-gray-100 border-2 border-gray-200 rounded-2xl gap-2 opacity-30" disabled>
+                    <span class="text-4xl">🗑️</span>
+                    <span class="font-bold text-lg">刪除選中</span>
+                </button>
+                <button onclick="document.getElementById('fileInput').click()" class="action-btn col-span-2 flex items-center justify-center p-4 bg-green-50 border-2 border-green-200 rounded-2xl gap-3">
+                    <span class="text-3xl">🖼️</span>
+                    <span class="font-bold text-lg">從手機選照片</span>
+                    <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFileUpload(event)">
+                </button>
+            </div>
+
+            <button onclick="showExportOptions()" class="w-full mt-6 py-4 bg-red-500 text-white rounded-2xl font-bold text-2xl shadow-lg action-btn">製作完成 (儲存)</button>
+        </div>
+
+        <!-- Modals -->
+        <!-- Export Modal -->
+        <div id="exportModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-6 z-[110]">
+            <div class="bg-white w-full rounded-3xl p-6 shadow-2xl">
+                <h3 class="text-2xl font-bold mb-2 text-center">要存成什麼格式？</h3>
+                <p class="text-gray-500 text-center mb-6">LINE 貼圖建議使用 APNG</p>
+                <div class="flex flex-col gap-4">
+                    <button onclick="exportAs('APNG')" class="flex items-center justify-between p-5 bg-blue-50 border-2 border-blue-200 rounded-2xl action-btn">
+                        <div class="text-left">
+                            <div class="font-bold text-xl text-blue-700">APNG (透明動態圖)</div>
+                            <div class="text-sm text-blue-500">適合 LINE 貼圖，畫質清晰</div>
+                        </div>
+                        <span class="text-3xl">✨</span>
+                    </button>
+                    <button onclick="exportAs('GIF')" class="flex items-center justify-between p-5 bg-orange-50 border-2 border-orange-200 rounded-2xl action-btn">
+                        <div class="text-left">
+                            <div class="font-bold text-xl text-orange-700">GIF (傳統動圖)</div>
+                            <div class="text-sm text-orange-500">通用性高，背景不透明</div>
+                        </div>
+                        <span class="text-3xl">🎞️</span>
+                    </button>
+                    <button onclick="closeExportModal()" class="w-full py-4 text-gray-500 font-bold text-lg">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Text Modal -->
+        <div id="textModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-6 z-[120]">
+            <div class="bg-white w-full rounded-3xl p-6 shadow-2xl">
+                <h3 class="text-xl font-bold mb-4">想寫什麼字？</h3>
+                <input type="text" id="textInput" class="w-full border-2 border-gray-300 p-4 rounded-xl text-xl mb-6" placeholder="例如：早安">
+                <div class="grid grid-cols-4 gap-2 mb-6">
+                    <button onclick="setTextColor('#EF4444')" class="w-10 h-10 rounded-full bg-red-500 border-4 border-white"></button>
+                    <button onclick="setTextColor('#3B82F6')" class="w-10 h-10 rounded-full bg-blue-500 border-4 border-white"></button>
+                    <button onclick="setTextColor('#10B981')" class="w-10 h-10 rounded-full bg-green-500 border-4 border-white"></button>
+                    <button onclick="setTextColor('#000000')" class="w-10 h-10 rounded-full bg-black border-4 border-white"></button>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="closeTextModal()" class="flex-1 py-3 bg-gray-200 rounded-xl font-bold">取消</button>
+                    <button onclick="confirmAddText()" class="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold">確定</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing Overlay -->
+        <div id="loadingOverlay" class="fixed inset-0 hidden flex-col items-center justify-center z-[200] text-white">
+            <div class="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+            <div class="text-xl font-bold tracking-widest" id="loadingText">處理中...</div>
+        </div>
+    </div>
+
+    <script>
+        // --- State ---
+        let frames = [{ id: Date.now(), objects: [] }];
+        let currentFrameIndex = 0;
+        let selectedObjectIndex = -1;
+        let isPreviewing = false;
+        let previewInterval = null;
+        let tempTextColor = "#EF4444";
+
+        let isDragging = false, isResizing = false;
+        let lastMousePos = { x: 0, y: 0 };
+        let startAngle = 0, startScale = 1;
+
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+
+        window.onload = () => {
+            renderFrameList();
+            draw();
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+            canvas.addEventListener('touchstart', (e) => onMouseDown(e.touches[0]), { passive: false });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onMouseMove(e.touches[0]); }, { passive: false });
+            window.addEventListener('touchend', onMouseUp);
+        };
+
+        function draw(targetCtx = ctx, frameIndex = currentFrameIndex, isExport = false) {
+            const currentCanvas = targetCtx.canvas;
+            targetCtx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
+            const frame = frames[frameIndex];
+            if (!frame) return;
+
+            frame.objects.forEach((obj, index) => {
+                targetCtx.save();
+                targetCtx.translate(obj.x, obj.y);
+                targetCtx.rotate(obj.rotation * Math.PI / 180);
+                targetCtx.scale(obj.scale, obj.scale);
+
+                let w = 80, h = 80;
+                if (obj.type === 'image') { w = obj.w; h = obj.h; }
+
+                if (obj.type === 'text' || obj.type === 'sticker') {
+                    targetCtx.font = obj.type === 'text' ? "bold 40px Noto Sans TC" : "60px Arial";
+                    targetCtx.textAlign = "center";
+                    targetCtx.textBaseline = "middle";
+                    targetCtx.shadowColor = "rgba(0,0,0,0.5)";
+                    targetCtx.shadowBlur = 4;
+                    targetCtx.strokeStyle = "white";
+                    targetCtx.lineWidth = 6;
+                    targetCtx.strokeText(obj.content, 0, 0);
+                    targetCtx.shadowBlur = 0;
+                    targetCtx.fillStyle = obj.color || "black";
+                    targetCtx.fillText(obj.content, 0, 0);
+                } else if (obj.type === 'image') {
+                    targetCtx.drawImage(obj.img, -w/2, -h/2, w, h);
+                }
+
+                // 只有在非導出模式且選中時才繪製 UI 控點
+                if (!isExport && index === selectedObjectIndex && !isPreviewing) {
+                    targetCtx.restore(); targetCtx.save();
+                    targetCtx.translate(obj.x, obj.y);
+                    targetCtx.rotate(obj.rotation * Math.PI / 180);
+                    const halfW = (w / 2) * obj.scale + 10;
+                    const halfH = (h / 2) * obj.scale + 10;
+                    targetCtx.strokeStyle = "#3B82F6";
+                    targetCtx.setLineDash([5, 5]);
+                    targetCtx.lineWidth = 2;
+                    targetCtx.strokeRect(-halfW, -halfH, halfW * 2, halfH * 2);
+                    targetCtx.setLineDash([]);
+                    targetCtx.fillStyle = "white";
+                    targetCtx.shadowBlur = 5;
+                    targetCtx.shadowColor = "rgba(0,0,0,0.3)";
+                    targetCtx.beginPath();
+                    targetCtx.arc(halfW, halfH, 20, 0, Math.PI * 2);
+                    targetCtx.fill();
+                    targetCtx.strokeStyle = "#3B82F6";
+                    targetCtx.lineWidth = 3;
+                    targetCtx.stroke();
+                    targetCtx.fillStyle = "#3B82F6";
+                    targetCtx.font = "bold 16px Arial";
+                    targetCtx.fillText("🔄", halfW, halfH);
+                }
+                targetCtx.restore();
+            });
+        }
+
+        // --- Interaction ---
+        function onMouseDown(e) {
+            if (isPreviewing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            
+            if (selectedObjectIndex !== -1) {
+                const obj = frames[currentFrameIndex].objects[selectedObjectIndex];
+                const w = obj.type === 'image' ? obj.w : 80, h = obj.type === 'image' ? obj.h : 80;
+                const handleDistX = (w/2 * obj.scale + 10), handleDistY = (h/2 * obj.scale + 10);
+                const angleRad = obj.rotation * Math.PI / 180;
+                const dx = x - obj.x, dy = y - obj.y;
+                const localX = dx * Math.cos(-angleRad) - dy * Math.sin(-angleRad);
+                const localY = dx * Math.sin(-angleRad) + dy * Math.cos(-angleRad);
+                if (Math.sqrt((localX - handleDistX)**2 + (localY - handleDistY)**2) < 30) {
+                    isResizing = true;
+                    startAngle = obj.rotation - Math.atan2(dy, dx) * 180 / Math.PI;
+                    startScale = obj.scale / Math.sqrt(dx*dx + dy*dy);
+                    return;
+                }
+            }
+
+            let found = -1;
+            for (let i = frames[currentFrameIndex].objects.length - 1; i >= 0; i--) {
+                const o = frames[currentFrameIndex].objects[i];
+                if (Math.sqrt((x - o.x)**2 + (y - o.y)**2) < 50 * o.scale) { found = i; break; }
+            }
+            selectedObjectIndex = found;
+            updateUIState();
+            if (found !== -1) { isDragging = true; lastMousePos = { x, y }; }
+            draw();
+        }
+
+        function onMouseMove(e) {
+            if (isPreviewing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            const obj = frames[currentFrameIndex].objects[selectedObjectIndex];
+            if (isDragging && obj) {
+                obj.x += (x - lastMousePos.x); obj.y += (y - lastMousePos.y);
+                lastMousePos = { x, y }; draw();
+            } else if (isResizing && obj) {
+                const dx = x - obj.x, dy = y - obj.y;
+                obj.scale = Math.max(0.3, Math.sqrt(dx*dx + dy*dy) * startScale);
+                obj.rotation = startAngle + Math.atan2(dy, dx) * 180 / Math.PI;
+                draw();
+            }
+        }
+
+        function onMouseUp() { isDragging = false; isResizing = false; }
+        function updateUIState() {
+            const delBtn = document.getElementById('deleteBtn');
+            delBtn.disabled = selectedObjectIndex === -1;
+            delBtn.style.opacity = selectedObjectIndex === -1 ? "0.3" : "1";
+        }
+
+        // --- Frame Control ---
+        function renderFrameList() {
+            const list = document.getElementById('frameList');
+            list.innerHTML = '';
+            frames.forEach((frame, index) => {
+                const card = document.createElement('div');
+                card.className = `frame-card flex-shrink-0 bg-white border-4 rounded-xl flex items-center justify-center cursor-pointer relative ${index === currentFrameIndex ? 'active' : 'border-gray-200'}`;
+                card.onclick = () => selectFrame(index);
+                card.innerHTML = `<span class="text-sm font-bold ${index === currentFrameIndex ? 'text-red-500' : 'text-gray-400'}">${index + 1}</span>`;
+                if (index === currentFrameIndex) {
+                    const copyBtn = document.createElement('button');
+                    copyBtn.innerHTML = "➕";
+                    copyBtn.className = "absolute -top-2 -right-2 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-md font-bold";
+                    copyBtn.onclick = (e) => { e.stopPropagation(); duplicateFrame(index); };
+                    card.appendChild(copyBtn);
+
+                    const delBtn = document.createElement('button');
+                    delBtn.innerHTML = "🗑️";
+                    delBtn.className = "absolute -bottom-2 -right-2 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-md text-xs";
+                    delBtn.onclick = (e) => { e.stopPropagation(); deleteFrame(index); };
+                    card.appendChild(delBtn);
+                }
+                list.appendChild(card);
+            });
+        }
+
+        function selectFrame(index) {
+            currentFrameIndex = index; selectedObjectIndex = -1; updateUIState();
+            renderFrameList(); draw();
+        }
+
+        function addFrame() { frames.push({ id: Date.now(), objects: [] }); selectFrame(frames.length - 1); }
+
+        function duplicateFrame(index) {
+            const newObjs = JSON.parse(JSON.stringify(frames[index].objects));
+            newObjs.forEach((o, i) => { if(o.type === 'image') o.img = frames[index].objects[i].img; });
+            frames.splice(index + 1, 0, { id: Date.now(), objects: newObjs });
+            selectFrame(index + 1);
+        }
+
+        function deleteFrame(index) {
+            if (frames.length <= 1) return;
+            frames.splice(index, 1);
+            currentFrameIndex = Math.max(0, currentFrameIndex - 1);
+            selectFrame(currentFrameIndex);
+        }
+
+        // --- Stickers & Text ---
+        function promptAddText() { document.getElementById('textModal').style.display = 'flex'; document.getElementById('textInput').focus(); }
+        function setTextColor(color) { tempTextColor = color; document.getElementById('textInput').style.color = color; }
+        function closeTextModal() { document.getElementById('textModal').style.display = 'none'; }
+        function confirmAddText() {
+            const val = document.getElementById('textInput').value;
+            if (val) {
+                frames[currentFrameIndex].objects.push({ type: 'text', content: val, x: 185, y: 160, scale: 1, rotation: 0, color: tempTextColor });
+                selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; updateUIState(); draw();
+            }
+            document.getElementById('textInput').value = ''; closeTextModal();
+        }
+        function addSticker(emoji) {
+            frames[currentFrameIndex].objects.push({ type: 'sticker', content: emoji, x: 185, y: 160, scale: 1.5, rotation: 0 });
+            selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; updateUIState(); draw();
+        }
+        function handleFileUpload(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const ratio = Math.min(150 / img.width, 150 / img.height);
+                    frames[currentFrameIndex].objects.push({ type: 'image', img, w: img.width * ratio, h: img.height * ratio, x: 185, y: 160, scale: 1, rotation: 0 });
+                    selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; updateUIState(); draw();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+        function deleteSelected() { if (selectedObjectIndex === -1) return; frames[currentFrameIndex].objects.splice(selectedObjectIndex, 1); selectedObjectIndex = -1; updateUIState(); draw(); }
+
+        // --- Preview ---
+        function previewAnimation() {
+            if (isPreviewing) {
+                clearInterval(previewInterval); isPreviewing = false;
+                document.getElementById('previewBtn').innerText = "預覽播放";
+                document.getElementById('previewBtn').classList.replace('bg-black', 'bg-white');
+                draw();
+            } else {
+                if (frames.length < 2) { alert('至少要兩個步驟喔！'); return; }
+                isPreviewing = true; selectedObjectIndex = -1; updateUIState();
+                document.getElementById('previewBtn').innerText = "停止預覽";
+                document.getElementById('previewBtn').classList.replace('bg-white', 'bg-black');
+                let pIndex = 0;
+                previewInterval = setInterval(() => {
+                    currentFrameIndex = pIndex; draw(); renderFrameList();
+                    pIndex = (pIndex + 1) % frames.length;
+                }, 400);
+            }
+        }
+
+        // --- EXPORT LOGIC ---
+        function showExportOptions() {
+            if (frames.length < 2) { alert('請至少製作 2 個分鏡圖再導出喔！'); return; }
+            document.getElementById('exportModal').style.display = 'flex';
+        }
+        function closeExportModal() { document.getElementById('exportModal').style.display = 'none'; }
+
+        async function exportAs(type) {
+            closeExportModal();
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            overlay.style.display = 'flex';
+            loadingText.innerText = `正在製作 ${type}...`;
+
+            try {
+                // 創建一個離屏 Canvas
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = 370;
+                offCanvas.height = 320;
+                const offCtx = offCanvas.getContext('2d');
+
+                const frameBuffers = [];
+                const delays = [];
+
+                for (let i = 0; i < frames.length; i++) {
+                    draw(offCtx, i, true); // 導出繪製模式
+                    const imageData = offCtx.getImageData(0, 0, 370, 320).data.buffer;
+                    frameBuffers.push(imageData);
+                    delays.push(400); // 400ms 每幀
+                }
+
+                let blob, filename;
+
+                if (type === 'APNG') {
+                    // 使用 UPNG.js
+                    const apngData = UPNG.encode(frameBuffers, 370, 320, 0, delays);
+                    blob = new Blob([apngData], { type: 'image/apng' });
+                    filename = `sticker_${Date.now()}.apng`;
+                } else {
+                    // 使用 gif.js
+                    const gif = new GIF({
+                        workers: 2,
+                        quality: 10,
+                        width: 370,
+                        height: 320,
+                        transparent: 'rgba(0,0,0,0)' // 嘗試透明
+                    });
+
+                    for (let i = 0; i < frames.length; i++) {
+                        draw(offCtx, i, true);
+                        gif.addFrame(offCtx, { delay: 400, copy: true });
+                    }
+
+                    blob = await new Promise((resolve) => {
+                        gif.on('finished', (b) => resolve(b));
+                        gif.render();
+                    });
+                    filename = `sticker_${Date.now()}.gif`;
+                }
+
+                // 下載檔案
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                alert(`${type} 製作完成！已開始下載。`);
+            } catch (err) {
+                console.error(err);
+                alert('製作過程中發生錯誤。');
+            } finally {
+                overlay.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+
+</html>
