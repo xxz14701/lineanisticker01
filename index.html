@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>動態貼圖製作</title>
+    <title>動態貼圖製</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="gif.js"></script>
     <style>
@@ -120,7 +120,7 @@
             </div>
 
             <button onclick="exportGIF()" class="w-full mt-5 py-4 bg-red-500 text-white rounded-2xl font-bold text-2xl shadow-lg action-btn">製作完成 (存成 GIF)</button>
-                    <p class="text-center text-gray-500 mt-4 text-sm">
+<p class="text-center text-gray-500 mt-4 text-sm">
                         Billy ^.^ | Program improved by AI @2026
                     </p>
         </div>
@@ -206,6 +206,15 @@
                 <!-- 按鈕：上下排列 -->
                 <button onclick="confirmAddText()" class="w-full py-3 mb-2 bg-red-500 text-white rounded-xl font-bold text-lg">確定加入</button>
                 <button onclick="closeTextModal()" class="w-full py-3 bg-gray-200 rounded-xl font-bold text-lg text-gray-600">取消</button>
+            </div>
+        </div>
+
+        <!-- Custom Alert Modal -->
+        <div id="alertModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-[300] p-6">
+            <div class="bg-white rounded-3xl p-6 shadow-2xl text-center" style="max-width:280px;width:100%;">
+                <div id="alertIcon" class="text-5xl mb-3">💬</div>
+                <div id="alertMsg" class="text-lg font-bold text-gray-800 mb-5 leading-snug"></div>
+                <button onclick="closeAlert()" class="w-full py-3 bg-red-500 text-white rounded-xl font-bold text-lg">確定</button>
             </div>
         </div>
 
@@ -629,7 +638,7 @@
                 document.getElementById('previewBtn').classList.replace('bg-black', 'bg-white');
                 draw();
             } else {
-                if (frames.length < 2) { alert('至少要兩個步驟喔！'); return; }
+                if (frames.length < 2) { showAlert('至少要兩個步驟喔！', '⚠️'); return; }
                 isPreviewing = true; selectedObjectIndex = -1; updateUIState();
                 document.getElementById('previewBtn').innerText = "停止預覽";
                 document.getElementById('previewBtn').classList.replace('bg-white', 'bg-black');
@@ -666,7 +675,7 @@
 
         // --- EXPORT GIF ---
         async function exportGIF() {
-            if (frames.length < 2) { alert('請至少製作 2 個步驟再儲存喔！'); return; }
+            if (frames.length < 2) { showAlert('請至少製作 2 個步驟再儲存喔！', '⚠️'); return; }
             const overlay = document.getElementById('loadingOverlay');
             overlay.style.display = 'flex';
             document.getElementById('loadingText').innerText = '正在製作 GIF，請稍候...';
@@ -685,12 +694,20 @@
                 a.href = url; a.download = `sticker_${Date.now()}.gif`;
                 document.body.appendChild(a); a.click();
                 document.body.removeChild(a); URL.revokeObjectURL(url);
-                alert('GIF 製作完成！已開始下載 🎉');
+                showAlert('GIF 製作完成！\n已開始下載', '🎉');
             } catch(err) {
-                console.error(err); alert('製作過程中發生錯誤，請再試一次。');
+                console.error(err); showAlert('製作過程中發生錯誤，\n請再試一次。', '😢');
             } finally {
                 overlay.style.display = 'none';
             }
+        }
+        function showAlert(msg, icon) {
+            document.getElementById('alertMsg').innerText = msg;
+            document.getElementById('alertIcon').innerText = icon || '💬';
+            document.getElementById('alertModal').style.display = 'flex';
+        }
+        function closeAlert() {
+            document.getElementById('alertModal').style.display = 'none';
         }
     </script>
 </body>
