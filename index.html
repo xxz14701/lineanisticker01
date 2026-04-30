@@ -337,7 +337,12 @@
 
         function draw(targetCtx = ctx, frameIndex = currentFrameIndex, isExport = false) {
             const currentCanvas = targetCtx.canvas;
-            targetCtx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
+            // export 時 ctx 已被 scale，clearRect 要用邏輯座標 370×320
+            if (isExport) {
+                targetCtx.clearRect(0, 0, 370, 320);
+            } else {
+                targetCtx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
+            }
             const frame = frames[frameIndex];
             if (!frame) return;
 
@@ -763,9 +768,11 @@
             offCanvas.width = W;
             offCanvas.height = H;
             const offCtx = offCanvas.getContext('2d');
-            // 縮放繪製內容以符合輸出尺寸
+            offCtx.clearRect(0, 0, W, H);
+            offCtx.save();
             offCtx.scale(W / 370, H / 320);
             draw(offCtx, index, true);
+            offCtx.restore();
             offCanvas.toBlob((blob) => {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -792,7 +799,6 @@
                 const offCanvas = document.createElement('canvas');
                 offCanvas.width = W; offCanvas.height = H;
                 const offCtx = offCanvas.getContext('2d');
-                offCtx.scale(W / 370, H / 320);
 
                 // 第二個 canvas 用來把透明像素換成色鍵
                 const keyCanvas = document.createElement('canvas');
@@ -811,7 +817,10 @@
                 for (let i = 0; i < frames.length; i++) {
                     // 先清空並畫內容（透明背景）
                     offCtx.clearRect(0, 0, W, H);
+                    offCtx.save();
+                    offCtx.scale(W / 370, H / 320);
                     draw(offCtx, i, true);
+                    offCtx.restore();
 
                     // 把透明像素（alpha < 10）填成色鍵顏色
                     const imgData = offCtx.getImageData(0, 0, W, H);
