@@ -121,12 +121,13 @@
                 <h2 class="font-bold text-gray-700 hidden md:block mb-2 text-lg">🛠️ 工具面板</h2>
                 
                 <div id="panel-add" class="flex flex-col gap-3">
-                    <!-- 挑選圖片 -->
-                    <button onclick="document.getElementById('fileInput').click()" class="action-btn flex items-center justify-center p-4 bg-green-50 hover:bg-green-100 border-2 border-green-300 rounded-2xl gap-3 transition-colors group">
+                    <!-- 挑選圖片 (使用 label 包裝，解決 iOS 點擊與事件衝突問題) -->
+                    <label class="action-btn flex items-center justify-center p-4 bg-green-50 hover:bg-green-100 border-2 border-green-300 rounded-2xl gap-3 transition-colors group cursor-pointer m-0">
                         <span class="text-3xl group-hover:scale-110 transition-transform">🖼️</span>
                         <span class="font-bold text-xl text-green-700">挑選圖片</span>
+                        <!-- 將 input 藏在 label 內，不用 onclick 就能觸發選檔 -->
                         <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFileUpload(event)">
-                    </button>
+                    </label>
 
                     <!-- 第二排：寫文字 + 加小物件 -->
                     <div class="grid grid-cols-2 gap-3">
@@ -324,16 +325,19 @@
         let lastMousePos = { x: 0, y: 0 };
         let startAngle = 0, startScale = 1;
 
-        const canvas = document.getElementById('mainCanvas');
-        const ctx = canvas.getContext('2d');
+        let canvas, ctx;
 
-        window.onload = () => {
+        // 確保 DOM 完全載入後才初始化事件
+        document.addEventListener('DOMContentLoaded', () => {
+            canvas = document.getElementById('mainCanvas');
+            ctx = canvas.getContext('2d');
+            
             renderFrameList();
             draw();
             
             // Mouse Events
             canvas.addEventListener('mousedown', onMouseDown);
-            window.addEventListener('mousemove', onMouseMove); // 改聽 window 確保拖曳滑出邊界不中斷
+            window.addEventListener('mousemove', onMouseMove);
             window.addEventListener('mouseup', onMouseUp);
             
             // Touch Events (確保 passive: false 阻止預設捲動)
@@ -356,10 +360,11 @@
             window.addEventListener('resize', () => {
                 if(!isPreviewing) draw();
             });
-        };
+        });
 
         // --- Core Drawing ---
         function draw(targetCtx = ctx, frameIndex = currentFrameIndex, isExport = false) {
+            if (!targetCtx) return;
             const currentCanvas = targetCtx.canvas;
             targetCtx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
             const frame = frames[frameIndex];
@@ -545,15 +550,20 @@
             const flipBtns = document.getElementById('flipBtns');
             const hasObj = selectedObjectIndex !== -1;
             
-            delBtn.disabled = !hasObj;
-            if(hasObj) {
-                delBtn.classList.replace('opacity-40', 'opacity-100');
-                delBtn.classList.add('hover:bg-red-50', 'hover:border-red-200');
-                delText.classList.replace('text-gray-600', 'text-red-600');
-            } else {
-                delBtn.classList.replace('opacity-100', 'opacity-40');
-                delBtn.classList.remove('hover:bg-red-50', 'hover:border-red-200');
-                delText.classList.replace('text-red-600', 'text-gray-600');
+            if (delBtn && delText) {
+                delBtn.disabled = !hasObj;
+                // 使用 add/remove 代替 replace，避免 class 狀態不一致報錯
+                if(hasObj) {
+                    delBtn.classList.remove('opacity-40');
+                    delBtn.classList.add('opacity-100', 'hover:bg-red-50', 'hover:border-red-200');
+                    delText.classList.remove('text-gray-600');
+                    delText.classList.add('text-red-600');
+                } else {
+                    delBtn.classList.remove('opacity-100', 'hover:bg-red-50', 'hover:border-red-200');
+                    delBtn.classList.add('opacity-40');
+                    delText.classList.remove('text-red-600');
+                    delText.classList.add('text-gray-600');
+                }
             }
 
             if (flipBtns) {
@@ -866,30 +876,50 @@
             updateUIState(); draw();
         }
 
+        // --- 修復：圖片上傳處理邏輯加入防呆與錯誤追蹤 ---
         function handleFileUpload(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    let ratio = 1;
-                    if (img.width > canvasW || img.height > canvasH) {
-                        ratio = Math.min(canvasW / img.width, canvasH / img.height);
-                    }
-                    
-                    frames[currentFrameIndex].objects.push({ 
-                        type: 'image', img, 
-                        w: img.width * ratio, h: img.height * ratio, 
-                        x: canvasW / 2, y: canvasH / 2, 
-                        scale: 1, rotation: 0 
-                    });
-                    selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; 
-                    updateUIState(); draw();
+            try {
+                const file = event.target.files[0]; 
+                if (!file) return;
+                
+                // 檢查是否為圖片檔案
+                if (!file.type.startsWith('image/')) {
+                    showAlert('請選擇有效的圖片檔案！', '⚠️');
+                    event.target.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let ratio = 1;
+                        if (img.width > canvasW || img.height > canvasH) {
+                            ratio = Math.min(canvasW / img.width, canvasH / img.height);
+                        }
+                        
+                        frames[currentFrameIndex].objects.push({ 
+                            type: 'image', img, 
+                            w: img.width * ratio, h: img.height * ratio, 
+                            x: canvasW / 2, y: canvasH / 2, 
+                            scale: 1, rotation: 0 
+                        });
+                        selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; 
+                        updateUIState(); draw();
+                    };
+                    img.onerror = () => {
+                        showAlert('圖片載入失敗，可能檔案格式不受支援！', '❌');
+                    };
+                    img.src = e.target.result;
                 };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-            event.target.value = ''; 
+                reader.readAsDataURL(file);
+            } catch (err) {
+                console.error(err);
+                showAlert('讀取圖片時發生異常！', '❌');
+            } finally {
+                // 清空 input，讓使用者能重複選取同一張圖片
+                event.target.value = ''; 
+            }
         }
 
         function flipSelected(dir) {
@@ -953,18 +983,28 @@
             }, 'image/png');
         }
 
+        // --- 修復：解決 GitHub Pages 上匯出 GIF 的 CORS Worker 限制 ---
         async function exportGIF() {
             if (frames.length < 2) { showAlert('請至少製作 2 個步驟再儲存喔！', '⚠️'); return; }
             if (isPreviewing) previewAnimation(); // Stop preview if running
 
             const overlay = document.getElementById('loadingOverlay');
             overlay.style.display = 'flex';
-            document.getElementById('loadingText').innerText = '正在製作 GIF，請稍候...';
+            document.getElementById('loadingText').innerText = '正在準備引擎資源...';
             
-            // 給 UI 一點時間渲染 loading 畫面
             await new Promise(r => setTimeout(r, 50));
+            let workerUrl = null;
 
             try {
+                // 將 Worker 轉換成 Blob 網址，繞開跨網域限制
+                const workerRes = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+                if (!workerRes.ok) throw new Error("無法取得 GIF 引擎。");
+                const workerBlob = await workerRes.blob();
+                workerUrl = URL.createObjectURL(workerBlob);
+
+                document.getElementById('loadingText').innerText = '正在製作 GIF，請稍候...';
+                await new Promise(r => setTimeout(r, 50));
+
                 const W = canvasW, H = canvasH;
                 const TRANSPARENT_KEY = 0x00FE00;
 
@@ -976,7 +1016,6 @@
                 keyCanvas.width = W; keyCanvas.height = H;
                 const keyCtx = keyCanvas.getContext('2d');
 
-                // 注意：使用 CDN 時，建議加上 workerScript 路徑確保 worker 正常運作
                 const gif = new GIF({
                     workers: 2,
                     quality: 10,
@@ -984,7 +1023,7 @@
                     height: H,
                     transparent: TRANSPARENT_KEY,
                     background: TRANSPARENT_KEY,
-                    workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js'
+                    workerScript: workerUrl
                 });
 
                 for (let i = 0; i < frames.length; i++) {
@@ -1022,6 +1061,7 @@
                 console.error(err); 
                 showAlert('製作過程中發生錯誤，\n請再試一次。', '😢');
             } finally {
+                if (workerUrl) URL.revokeObjectURL(workerUrl);
                 overlay.style.display = 'none';
             }
         }
