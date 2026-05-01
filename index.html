@@ -878,48 +878,54 @@
 
         // --- 修復：圖片上傳處理邏輯加入防呆與錯誤追蹤 ---
         function handleFileUpload(event) {
-            try {
-                const file = event.target.files[0]; 
-                if (!file) return;
-                
-                // 檢查是否為圖片檔案
-                if (!file.type.startsWith('image/')) {
-                    showAlert('請選擇有效的圖片檔案！', '⚠️');
-                    event.target.value = '';
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        let ratio = 1;
-                        if (img.width > canvasW || img.height > canvasH) {
-                            ratio = Math.min(canvasW / img.width, canvasH / img.height);
-                        }
-                        
-                        frames[currentFrameIndex].objects.push({ 
-                            type: 'image', img, 
-                            w: img.width * ratio, h: img.height * ratio, 
-                            x: canvasW / 2, y: canvasH / 2, 
-                            scale: 1, rotation: 0 
-                        });
-                        selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; 
-                        updateUIState(); draw();
-                    };
-                    img.onerror = () => {
-                        showAlert('圖片載入失敗，可能檔案格式不受支援！', '❌');
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            } catch (err) {
-                console.error(err);
-                showAlert('讀取圖片時發生異常！', '❌');
-            } finally {
-                // 清空 input，讓使用者能重複選取同一張圖片
-                event.target.value = ''; 
+            const fileInput = event.target;
+            const file = fileInput.files[0]; 
+            if (!file) return;
+            
+            // 檢查是否為圖片檔案
+            if (!file.type.startsWith('image/')) {
+                showAlert('請選擇有效的圖片檔案！', '⚠️');
+                fileInput.value = '';
+                return;
             }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    let ratio = 1;
+                    if (img.width > canvasW || img.height > canvasH) {
+                        ratio = Math.min(canvasW / img.width, canvasH / img.height);
+                    }
+                    
+                    frames[currentFrameIndex].objects.push({ 
+                        type: 'image', img, 
+                        w: img.width * ratio, h: img.height * ratio, 
+                        x: canvasW / 2, y: canvasH / 2, 
+                        scale: 1, rotation: 0,
+                        flipH: false, flipV: false
+                    });
+                    selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; 
+                    updateUIState(); draw();
+                    
+                    // 【關鍵修正】確保圖片完全載入並畫到畫布上後，才清空 input 值
+                    // 這樣就不會觸發手機瀏覽器的「中斷讀取」保護機制
+                    fileInput.value = ''; 
+                };
+                img.onerror = () => {
+                    showAlert('圖片載入失敗，可能檔案格式不受支援！', '❌');
+                    fileInput.value = '';
+                };
+                img.src = e.target.result;
+            };
+            
+            reader.onerror = () => {
+                showAlert('讀取檔案時發生錯誤！', '❌');
+                fileInput.value = '';
+            };
+            
+            // 開始讀取檔案
+            reader.readAsDataURL(file);
         }
 
         function flipSelected(dir) {
