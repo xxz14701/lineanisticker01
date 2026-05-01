@@ -2,308 +2,461 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>動態貼圖製作</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 使用 CDN 引入 gif.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <script src="gif.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
         
+        :root {
+            --accent: #EF4444;
+            --accent-light: #FEF2F2;
+        }
+
+        * { box-sizing: border-box; }
+
         body {
             font-family: 'Noto Sans TC', sans-serif;
-            background-color: #F3F4F6;
-            /* 避免下拉重新整理干擾 */
-            overscroll-behavior-y: none; 
+            background: #E8EAED;
+            overscroll-behavior: none;
             user-select: none;
+            min-height: 100vh;
         }
 
+        /* ── App Shell ── */
+        #app-shell {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            max-width: 100vw;
+        }
+
+        /* ── Desktop two-column layout ── */
+        @media (min-width: 900px) {
+            body { background: #D1D5DB; }
+            #app-shell { max-width: 1200px; margin: 0 auto; min-height: 100vh; }
+            #main-body {
+                display: grid;
+                grid-template-columns: 1fr 380px;
+                grid-template-rows: 1fr;
+                gap: 0;
+                flex: 1;
+                align-items: start;
+            }
+            #canvas-col {
+                border-right: 1px solid #E5E7EB;
+                padding: 24px;
+                position: sticky;
+                top: 0;
+                max-height: calc(100vh - 64px);
+                overflow-y: auto;
+            }
+            #controls-col {
+                overflow-y: auto;
+                max-height: calc(100vh - 64px);
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            #timeline-section {
+                padding: 16px;
+                border-top: none;
+                border-radius: 16px;
+                background: white;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+            }
+            #controls-section {
+                border-radius: 16px;
+                background: white;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+                padding: 16px;
+            }
+            #export-btn-wrap {
+                padding: 0;
+            }
+        }
+
+        /* ── Mobile: single column ── */
+        @media (max-width: 899px) {
+            #app-shell { background: white; box-shadow: none; }
+            #main-body { display: flex; flex-direction: column; }
+            #canvas-col { padding: 12px 12px 8px; background: #F9FAFB; border-bottom: 1px solid #E5E7EB; }
+            #controls-col { padding: 0; display: flex; flex-direction: column; }
+            #timeline-section { border-top: 1px solid #E5E7EB; padding: 12px 16px 16px; }
+            #controls-section { border-top: 1px solid #E5E7EB; padding: 16px; }
+            #export-btn-wrap { padding: 0 16px 24px; }
+        }
+
+        /* ── Header ── */
+        #app-header {
+            background: var(--accent);
+            color: white;
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            box-shadow: 0 2px 8px rgba(239,68,68,0.3);
+        }
+
+        #app-header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+
+        /* ── Canvas ── */
+        #canvasBox {
+            background-image: linear-gradient(45deg, #e5e5e5 25%, transparent 25%),
+                              linear-gradient(-45deg, #e5e5e5 25%, transparent 25%),
+                              linear-gradient(45deg, transparent 75%, #e5e5e5 75%),
+                              linear-gradient(-45deg, transparent 75%, #e5e5e5 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            touch-action: none;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+
+        .canvas-hint {
+            font-size: 0.75rem;
+            color: #6B7280;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* ── Toolbar Row ── */
+        .toolbar-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        /* ── Frame Cards ── */
         .frame-card {
             transition: all 0.2s;
-            min-width: 140px;
+            flex-shrink: 0;
         }
-
         .frame-card.active {
-            border-color: #3B82F6;
-            transform: translateY(-4px);
-            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+            border-color: #EF4444 !important;
+            transform: scale(1.03);
+            box-shadow: 0 0 14px rgba(239, 68, 68, 0.25);
         }
 
+        /* ── Action Buttons ── */
+        .action-btn { cursor: pointer; }
         .action-btn:active {
-            transform: scale(0.95);
-            transition: transform 0.1s;
+            transform: scale(0.93);
+            transition: transform 0.08s;
         }
 
-        /* 自訂橫向捲軸樣式 */
-        .custom-scrollbar::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
+        /* ── Control Buttons (add image, text, sticker, flip) ── */
+        .ctrl-btn-lg {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px;
+            border-radius: 16px;
+            border-width: 2px;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 1rem;
+            transition: filter 0.15s;
+            width: 100%;
         }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1; 
-            border-radius: 4px;
+        .ctrl-btn-lg:active { filter: brightness(0.93); }
+
+        .ctrl-btn-sm {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 8px;
+            border-radius: 14px;
+            border-width: 2px;
+            gap: 6px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            transition: filter 0.15s;
+            width: 100%;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #c1c1c1; 
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8; 
+        .ctrl-btn-sm:active { filter: brightness(0.93); }
+
+        .ctrl-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
         }
 
+        /* ── Scrollbar ── */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        #controls-col::-webkit-scrollbar, #canvas-col::-webkit-scrollbar { width: 6px; }
+        #controls-col::-webkit-scrollbar-thumb, #canvas-col::-webkit-scrollbar-thumb {
+            background: #D1D5DB; border-radius: 3px;
+        }
+
+        /* ── Loading overlay ── */
         #loadingOverlay {
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(4px);
+            background: rgba(0,0,0,0.72);
+            backdrop-filter: blur(5px);
         }
 
-        /* 確保畫布不會因為預設手勢而滑動頁面 */
-        #canvasBox {
-            touch-action: none;
+        /* ── Preview btn ── */
+        #previewBtn {
+            background: white;
+            color: var(--accent);
+            padding: 6px 16px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+            transition: all 0.15s;
+        }
+        #previewBtn.previewing {
+            background: #111;
+            color: white;
+        }
+
+        /* Section label */
+        .section-label {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 10px;
         }
     </style>
 </head>
-<body class="h-screen w-full flex flex-col m-0 p-0 overflow-hidden">
+<body>
 
-    <!-- Header (橫跨頂部) -->
-    <header class="bg-red-500 text-white px-4 py-3 flex justify-between items-center shrink-0 shadow-md z-10">
-        <h1 class="text-xl md:text-2xl font-bold tracking-tight flex items-center gap-2">
-            <span>✨</span> 動態貼圖製作
-        </h1>
-        <button onclick="previewAnimation()" id="previewBtn" class="bg-white text-red-500 px-5 py-2 rounded-full font-bold shadow-md action-btn transition-colors hover:bg-gray-50 flex items-center gap-2">
-            <span>▶️</span> <span>預覽播放</span>
-        </button>
+<div id="app-shell" class="bg-white shadow-2xl">
+
+    <!-- Header -->
+    <header id="app-header">
+        <h1>🎞 動態貼圖製作</h1>
+        <button onclick="previewAnimation()" id="previewBtn" class="action-btn">預覽播放</button>
     </header>
 
-    <!-- 主版面結構：電腦版左右分割，手機版上下堆疊 -->
-    <div class="flex flex-col md:flex-row flex-1 overflow-hidden">
-        
-        <!-- 左半部 (或手機上半部)：畫布與時間軸 -->
-        <div class="flex-1 flex flex-col bg-gray-100 overflow-hidden relative">
-            
-            <!-- 畫布區域 -->
-            <div class="flex-1 flex flex-col p-2 md:p-4 overflow-hidden relative">
-                <!-- 工具列與提示 -->
-                <div class="flex justify-between items-center w-full max-w-2xl mx-auto mb-2 shrink-0">
-                    <div class="text-xs md:text-sm text-gray-500 font-medium bg-white px-3 py-1.5 rounded-full shadow-sm">
-                        💡 拖移物件，按<span class="text-blue-500 font-bold mx-1">藍圈</span>旋轉縮放
-                    </div>
-                    <button onclick="openSizeModal()" class="text-xs md:text-sm font-bold text-gray-700 bg-white border border-gray-300 px-4 py-1.5 rounded-full shadow-sm hover:bg-gray-50 flex items-center gap-1 action-btn transition-colors">
-                        ⚙️ 尺寸 <span id="canvasSizeDisplay" class="text-blue-600 ml-1">370x320</span>
-                    </button>
-                </div>
+    <!-- Main Body (2-col on desktop, 1-col on mobile) -->
+    <div id="main-body">
 
-                <!-- 畫布容器 (動態置中與縮放) -->
-                <div class="flex-1 w-full flex justify-center items-center overflow-hidden min-h-[200px]">
-                    <div id="canvasBox" class="bg-white border-4 border-white rounded-xl shadow-md relative" 
-                         style="aspect-ratio: 370/320; max-width: 100%; max-height: 100%; background-image: linear-gradient(45deg, #e5e5e5 25%, transparent 25%), linear-gradient(-45deg, #e5e5e5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e5e5 75%), linear-gradient(-45deg, transparent 75%, #e5e5e5 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;">
-                        <!-- 實際 Canvas 元素完全填滿這個 Box -->
-                        <canvas id="mainCanvas" width="370" height="320" class="w-full h-full block absolute top-0 left-0 rounded-lg"></canvas>
-                    </div>
-                </div>
+        <!-- LEFT: Canvas Column -->
+        <div id="canvas-col">
+            <!-- Toolbar row -->
+            <div class="toolbar-row">
+                <div class="canvas-hint">💡 拖移物件，按<span style="color:#3B82F6;font-weight:700;">藍圈</span>旋轉縮放</div>
+                <button onclick="openSizeModal()" class="action-btn" style="font-size:0.78rem;font-weight:700;color:#374151;background:white;border:1.5px solid #D1D5DB;padding:5px 12px;border-radius:999px;box-shadow:0 1px 3px rgba(0,0,0,0.07);display:flex;align-items:center;gap:4px;">
+                    ⚙️ 尺寸 <span id="canvasSizeDisplay" style="color:#3B82F6;margin-left:2px;">370x320</span>
+                </button>
             </div>
 
-            <!-- Frame Timeline (橫向滑動區塊) -->
-            <div class="w-full bg-white border-t border-gray-200 shrink-0 flex flex-col shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                <div class="flex justify-between items-center px-4 py-2 border-b border-gray-100">
-                    <span class="font-bold text-gray-700">🎬 動畫步驟</span>
-                    <button onclick="addFrame()" class="text-blue-600 bg-blue-50 px-3 py-1 rounded-full font-bold text-sm hover:bg-blue-100 transition-colors">+ 新增步驟</button>
-                </div>
-
-                <div id="frameList" class="flex overflow-x-auto gap-4 px-4 py-4 custom-scrollbar items-start" style="min-height: 160px;">
-                    <!-- Frames 將由 JS 動態產生 -->
+            <!-- Canvas -->
+            <div style="width:100%;">
+                <div id="canvasBox" style="width:100%;aspect-ratio:370/320;background:white;border:3px solid #E5E7EB;">
+                    <canvas id="mainCanvas" width="370" height="320" style="width:100%;height:100%;display:block;"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- 右半部 (或手機下半部)：控制面板 -->
-        <div class="w-full md:w-[380px] bg-white border-t md:border-t-0 md:border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto custom-scrollbar z-10 shadow-lg md:shadow-none">
-            <div class="p-5 flex flex-col gap-4">
-                <h2 class="font-bold text-gray-700 hidden md:block mb-2 text-lg">🛠️ 工具面板</h2>
-                
-                <div id="panel-add" class="flex flex-col gap-3">
-                    <!-- 挑選圖片 (使用 label 包裝，解決 iOS 點擊與事件衝突問題) -->
-                    <label class="action-btn flex items-center justify-center p-4 bg-green-50 hover:bg-green-100 border-2 border-green-300 rounded-2xl gap-3 transition-colors group cursor-pointer m-0">
-                        <span class="text-3xl group-hover:scale-110 transition-transform">🖼️</span>
-                        <span class="font-bold text-xl text-green-700">挑選圖片</span>
-                        <!-- 將 input 藏在 label 內，不用 onclick 就能觸發選檔 -->
+        <!-- RIGHT: Controls Column -->
+        <div id="controls-col">
+
+            <!-- Timeline Section -->
+            <div id="timeline-section">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <span class="section-label" style="margin-bottom:0;">🎬 動畫步驟</span>
+                    <button onclick="addFrame()" style="color:#3B82F6;font-weight:700;font-size:0.95rem;">＋ 新增步驟</button>
+                </div>
+                <div id="frameList" class="no-scrollbar" style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;"></div>
+            </div>
+
+            <!-- Controls Section -->
+            <div id="controls-section">
+                <div class="section-label">🛠 新增素材</div>
+                <div id="panel-add" style="display:flex;flex-direction:column;gap:10px;">
+                    
+                    <!-- 挑選圖片 -->
+                    <button onclick="document.getElementById('fileInput').click()" class="action-btn ctrl-btn-lg" style="background:#F0FDF4;border-color:#86EFAC;color:#15803D;">
+                        <span style="font-size:1.6rem;">🖼️</span>
+                        <span>挑選圖片</span>
                         <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFileUpload(event)">
-                    </label>
+                    </button>
 
-                    <!-- 第二排：寫文字 + 加小物件 -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <button onclick="promptAddText()" class="action-btn flex flex-col items-center justify-center p-4 bg-yellow-50 hover:bg-yellow-100 border-2 border-yellow-200 rounded-2xl gap-2 transition-colors">
-                            <span class="text-3xl">✍️</span>
-                            <span class="font-bold text-gray-700">寫文字</span>
+                    <!-- 寫文字 + 加小物件 -->
+                    <div class="ctrl-grid-2">
+                        <button onclick="promptAddText()" class="action-btn ctrl-btn-sm" style="background:#FEFCE8;border-color:#FDE047;color:#713F12;">
+                            <span style="font-size:1.6rem;">✍️</span>
+                            <span>寫文字</span>
                         </button>
-                        <button onclick="openStickerModal()" class="action-btn flex flex-col items-center justify-center p-4 bg-pink-50 hover:bg-pink-100 border-2 border-pink-200 rounded-2xl gap-2 transition-colors">
-                            <span class="text-3xl">🎨</span>
-                            <span class="font-bold text-gray-700">加小物件</span>
+                        <button onclick="openStickerModal()" class="action-btn ctrl-btn-sm" style="background:#FDF2F8;border-color:#F9A8D4;color:#9D174D;">
+                            <span style="font-size:1.6rem;">🎨</span>
+                            <span>加小物件</span>
                         </button>
                     </div>
 
-                    <div class="border-t border-gray-100 my-1"></div>
-
-                    <!-- 第三排：翻轉 (物件選中時才啟用) -->
-                    <div class="text-sm font-bold text-gray-400 px-1">物件控制</div>
-                    <div id="flipBtns" class="grid grid-cols-2 gap-3 opacity-40 pointer-events-none transition-opacity">
-                        <button onclick="flipSelected('H')" class="action-btn flex flex-col items-center justify-center p-3 bg-blue-50 border-2 border-blue-200 rounded-xl gap-1 transition-colors">
-                            <span class="text-2xl">↔️</span>
-                            <span class="font-bold text-sm text-blue-700">水平翻轉</span>
+                    <!-- 翻轉 -->
+                    <div id="flipBtns" class="ctrl-grid-2" style="opacity:0.3;pointer-events:none;transition:opacity 0.2s;">
+                        <button onclick="flipSelected('H')" class="action-btn ctrl-btn-sm" style="background:#EFF6FF;border-color:#BFDBFE;color:#1D4ED8;">
+                            <span style="font-size:1.4rem;">↔️</span>
+                            <span>水平翻轉</span>
                         </button>
-                        <button onclick="flipSelected('V')" class="action-btn flex flex-col items-center justify-center p-3 bg-purple-50 border-2 border-purple-200 rounded-xl gap-1 transition-colors">
-                            <span class="text-2xl">↕️</span>
-                            <span class="font-bold text-sm text-purple-700">垂直翻轉</span>
+                        <button onclick="flipSelected('V')" class="action-btn ctrl-btn-sm" style="background:#F5F3FF;border-color:#DDD6FE;color:#6D28D9;">
+                            <span style="font-size:1.4rem;">↕️</span>
+                            <span>垂直翻轉</span>
                         </button>
                     </div>
 
-                    <!-- 第四排：刪除 -->
-                    <button onclick="deleteSelected()" id="deleteBtn" class="action-btn flex items-center justify-center p-3 bg-gray-50 hover:bg-red-50 border-2 border-gray-200 hover:border-red-200 rounded-xl gap-2 opacity-40 transition-colors" disabled>
-                        <span class="text-xl">🗑️</span>
-                        <span class="font-bold text-gray-600" id="deleteBtnText">刪除選中物件</span>
+                    <!-- 刪除 -->
+                    <button onclick="deleteSelected()" id="deleteBtn" class="action-btn ctrl-btn-lg" style="background:#F9FAFB;border-color:#E5E7EB;color:#374151;opacity:0.3;transition:opacity 0.2s;" disabled>
+                        <span style="font-size:1.4rem;">🗑️</span>
+                        <span>刪除選中的物件</span>
                     </button>
-                </div>
-
-                <div class="mt-4 flex-1 flex flex-col justify-end">
-                    <button onclick="exportGIF()" class="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-bold text-xl shadow-[0_8px_15px_-3px_rgba(239,68,68,0.4)] action-btn transition-all flex justify-center items-center gap-2">
-                        <span>💾</span> 製作完成 (存成 GIF)
-                    </button>
-                    <p class="text-center text-gray-400 mt-4 text-xs font-medium pb-2">
-                        Dynamic Sticker Maker @2026
-                    </p>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- =============== Modals (彈出視窗) =============== -->
+            <!-- Export Button -->
+            <div id="export-btn-wrap">
+                <button onclick="exportGIF()" class="action-btn" style="width:100%;padding:16px;background:#EF4444;color:white;border-radius:16px;font-weight:700;font-size:1.1rem;box-shadow:0 4px 14px rgba(239,68,68,0.35);">
+                    🎁 製作完成（存成 GIF）
+                </button>
+                <p style="text-align:center;color:#9CA3AF;margin-top:10px;font-size:0.72rem;">
+                    Billy ^.^ | Enhanced Download Sizing @2026
+                </p>
+            </div>
+
+        </div><!-- /controls-col -->
+    </div><!-- /main-body -->
 
     <!-- Size Setting Modal -->
-    <div id="sizeModal" class="fixed inset-0 bg-black/60 items-center justify-center p-4 z-[130] backdrop-blur-sm" style="display:none">
-        <div class="bg-white rounded-3xl p-6 shadow-2xl w-full max-w-[340px] transform transition-transform">
-            <h3 class="text-xl font-bold mb-4 text-center">⚙️ 設定畫布與下載尺寸</h3>
-            <div class="flex items-center gap-3 mb-5">
-                <div class="flex-1">
-                    <label class="block text-sm font-bold text-gray-500 mb-1 text-center">寬度 (px)</label>
-                    <input type="number" id="canvasWidthInput" class="w-full border-2 border-gray-300 focus:border-blue-500 outline-none p-2 rounded-xl text-xl text-center font-bold transition-colors" value="370">
+    <div id="sizeModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-[130]">
+        <div class="bg-white rounded-3xl p-6 shadow-2xl w-full" style="max-width:320px;">
+                <h3 class="text-xl font-bold mb-4 text-center">⚙️ 設定畫布與下載尺寸</h3>
+                <div class="flex items-center gap-2 mb-5">
+                    <div class="flex-1">
+                        <label class="block text-sm font-bold text-gray-500 mb-1 text-center">寬度 (px)</label>
+                        <input type="number" id="canvasWidthInput" class="w-full border-2 border-gray-300 p-2 rounded-xl text-xl text-center font-bold" value="370">
+                    </div>
+                    <span class="text-2xl font-bold text-gray-400 mt-5">×</span>
+                    <div class="flex-1">
+                        <label class="block text-sm font-bold text-gray-500 mb-1 text-center">高度 (px)</label>
+                        <input type="number" id="canvasHeightInput" class="w-full border-2 border-gray-300 p-2 rounded-xl text-xl text-center font-bold" value="320">
+                    </div>
                 </div>
-                <span class="text-2xl font-bold text-gray-400 mt-5">×</span>
-                <div class="flex-1">
-                    <label class="block text-sm font-bold text-gray-500 mb-1 text-center">高度 (px)</label>
-                    <input type="number" id="canvasHeightInput" class="w-full border-2 border-gray-300 focus:border-blue-500 outline-none p-2 rounded-xl text-xl text-center font-bold transition-colors" value="320">
-                </div>
-            </div>
-            
-            <button onclick="useUploadedImageSize()" class="w-full py-3 mb-5 bg-green-50 text-green-700 border-2 border-green-300 hover:bg-green-100 rounded-xl font-bold text-sm flex items-center justify-center gap-2 action-btn transition-colors">
-                <span class="text-xl">🖼️</span> 依照上傳圖片的原始尺寸
-            </button>
+                
+                <button onclick="useUploadedImageSize()" class="w-full py-3 mb-5 bg-green-50 text-green-700 border-2 border-green-300 rounded-xl font-bold text-sm flex items-center justify-center gap-2 action-btn">
+                    <span class="text-xl">🖼️</span> 依照上傳圖片的原始尺寸
+                </button>
 
-            <div class="flex gap-3">
-                <button onclick="closeSizeModal()" class="flex-1 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-gray-600 action-btn transition-colors">取消</button>
-                <button onclick="confirmSizeChange()" class="flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold action-btn transition-colors">確定更改</button>
-            </div>
+                <div class="flex gap-3">
+                    <button onclick="closeSizeModal()" class="flex-1 py-3 bg-gray-200 rounded-xl font-bold text-lg text-gray-600 action-btn">取消</button>
+                    <button onclick="confirmSizeChange()" class="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold text-lg action-btn">確定更改</button>
+                </div>
         </div>
     </div>
 
     <!-- Sticker Picker Modal -->
-    <div id="stickerModal" class="fixed inset-0 bg-black/60 items-center justify-center p-4 z-[120] backdrop-blur-sm" style="display:none">
-        <div class="bg-white w-full max-w-[400px] rounded-3xl p-6 shadow-2xl">
+    <div id="stickerModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-6 z-[120]">
+        <div class="bg-white w-full rounded-3xl p-6 shadow-2xl" style="max-width:380px;">
             <h3 class="text-2xl font-bold mb-4 text-center">選一個小物件 🎉</h3>
-            <div class="grid grid-cols-6 gap-2 mb-5" id="stickerGrid"></div>
-            <button onclick="closeStickerModal()" class="w-full py-3 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-gray-600 text-lg action-btn transition-colors">取消</button>
+            <div class="grid grid-cols-5 gap-3 mb-5" id="stickerGrid"></div>
+            <button onclick="closeStickerModal()" class="w-full py-3 bg-gray-200 rounded-xl font-bold text-gray-600 text-lg action-btn">取消</button>
         </div>
     </div>
 
     <!-- Text Modal -->
-    <div id="textModal" class="fixed inset-0 bg-black/60 items-center justify-center p-4 z-[120] backdrop-blur-sm" style="display:none">
-        <div class="bg-white rounded-3xl p-5 shadow-2xl w-full max-w-[320px] max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <h3 class="text-xl font-bold mb-3 flex items-center gap-2"><span>✍️</span> 寫文字</h3>
+    <div id="textModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-[120]">
+        <div class="bg-white rounded-3xl p-5 shadow-2xl" style="width:300px;max-height:92vh;overflow-y:auto;">
+                <h3 class="text-xl font-bold mb-3">✍️ 寫文字</h3>
 
-            <!-- 多行文字輸入 -->
-            <textarea id="textInput" rows="3" class="w-full border-2 border-gray-300 focus:border-blue-500 outline-none p-3 rounded-xl text-xl mb-3 block resize-none transition-colors" placeholder="可輸入多行文字&#10;例如：早安&#10;新的一天"></textarea>
+                <!-- 多行文字輸入 -->
+                <textarea id="textInput" rows="3" class="w-full border-2 border-gray-300 p-3 rounded-xl text-xl mb-1 block resize-none" placeholder="可輸入多行文字&#10;例如：早安&#10;新的一天"></textarea>
 
-            <!-- 行距 -->
-            <div class="flex items-center gap-2 mb-4">
-                <span class="text-sm font-bold text-gray-500 whitespace-nowrap">行距</span>
-                <div class="flex gap-1 flex-1">
-                    <button onclick="setLineHeight(1.0)" id="lh-10" class="flex-1 py-1.5 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">緊</button>
-                    <button onclick="setLineHeight(1.4)" id="lh-14" class="flex-1 py-1.5 rounded-lg border-2 border-blue-400 bg-blue-50 font-bold text-blue-600 text-sm">中</button>
-                    <button onclick="setLineHeight(1.9)" id="lh-19" class="flex-1 py-1.5 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">寬</button>
-                    <button onclick="setLineHeight(2.5)" id="lh-25" class="flex-1 py-1.5 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">超</button>
+                <!-- 行距 -->
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-sm font-bold text-gray-500 whitespace-nowrap">行距</span>
+                    <div class="flex gap-1 flex-1">
+                        <button onclick="setLineHeight(1.0)" id="lh-10" class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">緊</button>
+                        <button onclick="setLineHeight(1.4)" id="lh-14" class="flex-1 py-2 rounded-lg border-2 border-blue-400 bg-blue-50 font-bold text-blue-600 text-sm">中</button>
+                        <button onclick="setLineHeight(1.9)" id="lh-19" class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">寬</button>
+                        <button onclick="setLineHeight(2.5)" id="lh-25" class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">超寬</button>
+                    </div>
                 </div>
-            </div>
 
-            <!-- 文字顏色 -->
-            <div class="text-sm font-bold text-gray-500 mb-2 flex items-center justify-between">
-                <span>🖊 文字顏色</span>
-                <div id="colorPreview" class="w-6 h-6 rounded-full border-2 border-gray-300 shadow-inner" style="background:#EF4444"></div>
-            </div>
-            <div class="flex flex-wrap gap-2 items-center mb-4 bg-gray-50 p-2 rounded-xl border border-gray-100">
-                <button onclick="setTextColor('#EF4444')" class="w-8 h-8 rounded-full bg-red-500 border-2 border-transparent hover:border-gray-400 shadow-sm"></button>
-                <button onclick="setTextColor('#3B82F6')" class="w-8 h-8 rounded-full bg-blue-500 border-2 border-transparent hover:border-gray-400 shadow-sm"></button>
-                <button onclick="setTextColor('#10B981')" class="w-8 h-8 rounded-full bg-green-500 border-2 border-transparent hover:border-gray-400 shadow-sm"></button>
-                <button onclick="setTextColor('#F59E0B')" class="w-8 h-8 rounded-full bg-yellow-500 border-2 border-transparent hover:border-gray-400 shadow-sm"></button>
-                <button onclick="setTextColor('#8B5CF6')" class="w-8 h-8 rounded-full bg-purple-500 border-2 border-transparent hover:border-gray-400 shadow-sm"></button>
-                <button onclick="setTextColor('#000000')" class="w-8 h-8 rounded-full bg-black border-2 border-transparent hover:border-gray-400 shadow-sm"></button>
-                <button onclick="setTextColor('#FFFFFF')" class="w-8 h-8 rounded-full bg-white border-2 border-gray-300 hover:border-gray-400 shadow-sm"></button>
-                <label class="w-8 h-8 rounded-full border-2 border-dashed border-gray-400 flex items-center justify-center cursor-pointer relative overflow-hidden shadow-sm hover:bg-gray-200" title="自訂">
-                    <span class="text-xs">🎨</span>
-                    <input type="color" id="customColorInput" onchange="setTextColor(this.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
-                </label>
-            </div>
+                <!-- 文字顏色 -->
+                <div class="text-sm font-bold text-gray-500 mb-1">🖊 文字顏色</div>
+                <div class="flex flex-wrap gap-2 items-center mb-3">
+                    <button onclick="setTextColor('#EF4444')" class="w-9 h-9 rounded-full bg-red-500 border-4 border-white shadow"></button>
+                    <button onclick="setTextColor('#3B82F6')" class="w-9 h-9 rounded-full bg-blue-500 border-4 border-white shadow"></button>
+                    <button onclick="setTextColor('#10B981')" class="w-9 h-9 rounded-full bg-green-500 border-4 border-white shadow"></button>
+                    <button onclick="setTextColor('#F59E0B')" class="w-9 h-9 rounded-full bg-yellow-500 border-4 border-white shadow"></button>
+                    <button onclick="setTextColor('#8B5CF6')" class="w-9 h-9 rounded-full bg-purple-500 border-4 border-white shadow"></button>
+                    <button onclick="setTextColor('#000000')" class="w-9 h-9 rounded-full bg-black border-4 border-white shadow"></button>
+                    <button onclick="setTextColor('#FFFFFF')" class="w-9 h-9 rounded-full bg-white border-4 border-gray-300 shadow"></button>
+                    <label class="w-9 h-9 rounded-full border-4 border-dashed border-gray-400 flex items-center justify-center cursor-pointer relative overflow-hidden shadow" title="自訂">
+                        <span>🎨</span>
+                        <input type="color" id="customColorInput" onchange="setTextColor(this.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+                    </label>
+                    <div id="colorPreview" class="w-9 h-9 rounded-full border-2 border-gray-300 shadow" style="background:#EF4444"></div>
+                </div>
 
-            <!-- 框線顏色 -->
-            <div class="text-sm font-bold text-gray-500 mb-2 flex items-center justify-between">
-                <span>🔲 框線顏色</span>
-                <div id="strokeColorPreview" class="w-6 h-6 rounded-full border-2 border-gray-300 shadow-inner" style="background:#FFFFFF"></div>
-            </div>
-            <div class="flex flex-wrap gap-2 items-center mb-4 bg-gray-50 p-2 rounded-xl border border-gray-100">
-                <button onclick="setStrokeColor('#FFFFFF')" class="w-8 h-8 rounded-full bg-white border-2 border-gray-300 shadow-sm hover:border-gray-400"></button>
-                <button onclick="setStrokeColor('#000000')" class="w-8 h-8 rounded-full bg-black border-2 border-transparent shadow-sm hover:border-gray-400"></button>
-                <button onclick="setStrokeColor('#EF4444')" class="w-8 h-8 rounded-full bg-red-500 border-2 border-transparent shadow-sm hover:border-gray-400"></button>
-                <button onclick="setStrokeColor('#3B82F6')" class="w-8 h-8 rounded-full bg-blue-500 border-2 border-transparent shadow-sm hover:border-gray-400"></button>
-                <button onclick="setStrokeColor('#F59E0B')" class="w-8 h-8 rounded-full bg-yellow-500 border-2 border-transparent shadow-sm hover:border-gray-400"></button>
-                <button onclick="setStrokeColor('none')" class="w-8 h-8 rounded-full border-2 border-dashed border-gray-400 flex items-center justify-center shadow-sm bg-gray-100 font-bold text-gray-500 text-xs hover:bg-gray-200" title="無框線">✕</button>
-                <label class="w-8 h-8 rounded-full border-2 border-dashed border-blue-400 flex items-center justify-center cursor-pointer relative overflow-hidden shadow-sm hover:bg-blue-50" title="自訂">
-                    <span class="text-xs">🎨</span>
-                    <input type="color" id="customStrokeInput" onchange="setStrokeColor(this.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
-                </label>
-            </div>
+                <!-- 框線顏色 -->
+                <div class="border-t border-gray-100 mb-3"></div>
+                <div class="text-sm font-bold text-gray-500 mb-1">🔲 框線顏色</div>
+                <div class="flex flex-wrap gap-2 items-center mb-3">
+                    <button onclick="setStrokeColor('#FFFFFF')" class="w-9 h-9 rounded-full bg-white border-4 border-gray-300 shadow"></button>
+                    <button onclick="setStrokeColor('#000000')" class="w-9 h-9 rounded-full bg-black border-4 border-white shadow"></button>
+                    <button onclick="setStrokeColor('#EF4444')" class="w-9 h-9 rounded-full bg-red-500 border-4 border-white shadow"></button>
+                    <button onclick="setStrokeColor('#3B82F6')" class="w-9 h-9 rounded-full bg-blue-500 border-4 border-white shadow"></button>
+                    <button onclick="setStrokeColor('#F59E0B')" class="w-9 h-9 rounded-full bg-yellow-500 border-4 border-white shadow"></button>
+                    <button onclick="setStrokeColor('#10B981')" class="w-9 h-9 rounded-full bg-green-500 border-4 border-white shadow"></button>
+                    <button onclick="setStrokeColor('none')" class="w-9 h-9 rounded-full border-4 border-dashed border-gray-400 flex items-center justify-center shadow bg-gray-50 font-bold text-gray-500" title="無框線">✕</button>
+                    <label class="w-9 h-9 rounded-full border-4 border-dashed border-blue-300 flex items-center justify-center cursor-pointer relative overflow-hidden shadow" title="自訂">
+                        <span>🎨</span>
+                        <input type="color" id="customStrokeInput" onchange="setStrokeColor(this.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+                    </label>
+                    <div id="strokeColorPreview" class="w-9 h-9 rounded-full border-2 border-gray-300 shadow" style="background:#FFFFFF"></div>
+                </div>
 
-            <!-- 框線粗細 -->
-            <div class="text-sm font-bold text-gray-500 mb-1">📏 框線粗細</div>
-            <div class="flex gap-1 mb-4">
-                <button onclick="setStrokeWidth(0)"  id="sw-0"  class="flex-1 py-1.5 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-500 text-sm">無</button>
-                <button onclick="setStrokeWidth(3)"  id="sw-3"  class="flex-1 py-1.5 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">細</button>
-                <button onclick="setStrokeWidth(6)"  id="sw-6"  class="flex-1 py-1.5 rounded-lg border-2 border-blue-400 bg-blue-50 font-bold text-blue-600 text-sm">中</button>
-                <button onclick="setStrokeWidth(12)" id="sw-12" class="flex-1 py-1.5 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">粗</button>
-                <button onclick="setStrokeWidth(20)" id="sw-20" class="flex-1 py-1.5 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">極</button>
-            </div>
+                <!-- 框線粗細 -->
+                <div class="text-sm font-bold text-gray-500 mb-1">📏 框線粗細</div>
+                <div class="flex gap-1 mb-4">
+                    <button onclick="setStrokeWidth(0)"  id="sw-0"  class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-500 text-sm">無</button>
+                    <button onclick="setStrokeWidth(3)"  id="sw-3"  class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">細</button>
+                    <button onclick="setStrokeWidth(6)"  id="sw-6"  class="flex-1 py-2 rounded-lg border-2 border-blue-400 bg-blue-50 font-bold text-blue-600 text-sm">中</button>
+                    <button onclick="setStrokeWidth(12)" id="sw-12" class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">粗</button>
+                    <button onclick="setStrokeWidth(20)" id="sw-20" class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">超粗</button>
+                </div>
 
-            <!-- 即時預覽 -->
-            <div class="mb-5 bg-[#e5e5e5] rounded-xl overflow-hidden flex items-center justify-center relative shadow-inner" style="min-height:80px; background-image: linear-gradient(45deg, #d4d4d4 25%, transparent 25%), linear-gradient(-45deg, #d4d4d4 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d4d4d4 75%), linear-gradient(-45deg, transparent 75%, #d4d4d4 75%); background-size: 10px 10px; background-position: 0 0, 0 5px, 5px -5px, -5px 0px;">
-                <canvas id="textPreviewCanvas" width="280" height="80" style="display:block;max-width:100%;"></canvas>
-            </div>
+                <!-- 即時預覽 -->
+                <div class="mb-4 bg-gray-100 rounded-2xl overflow-hidden flex items-center justify-center" style="min-height:72px;">
+                    <canvas id="textPreviewCanvas" width="240" height="68" style="display:block;max-width:100%;"></canvas>
+                </div>
 
-            <!-- 按鈕：上下排列 -->
-            <button onclick="confirmAddText()" class="w-full py-3 mb-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold text-lg action-btn shadow-md transition-colors">確定加入</button>
-            <button onclick="closeTextModal()" class="w-full py-3 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-gray-600 action-btn transition-colors">取消</button>
+                <!-- 按鈕：上下排列 -->
+                <button onclick="confirmAddText()" class="w-full py-3 mb-2 bg-red-500 text-white rounded-xl font-bold text-lg action-btn">確定加入</button>
+                <button onclick="closeTextModal()" class="w-full py-3 bg-gray-200 rounded-xl font-bold text-lg text-gray-600 action-btn">取消</button>
         </div>
     </div>
 
     <!-- Custom Alert Modal -->
-    <div id="alertModal" class="fixed inset-0 bg-black/50 items-center justify-center z-[300] p-4 backdrop-blur-sm" style="display:none">
-        <div class="bg-white rounded-3xl p-6 shadow-2xl text-center w-full max-w-[280px] transform transition-transform">
+    <div id="alertModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-[300] p-6">
+        <div class="bg-white rounded-3xl p-6 shadow-2xl text-center" style="max-width:280px;width:100%;">
             <div id="alertIcon" class="text-5xl mb-3">💬</div>
-            <div id="alertMsg" class="text-lg font-bold text-gray-800 mb-6 leading-relaxed"></div>
-            <button onclick="closeAlert()" class="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold text-lg action-btn transition-colors">我知道了</button>
+            <div id="alertMsg" class="text-lg font-bold text-gray-800 mb-5 leading-snug"></div>
+            <button onclick="closeAlert()" class="w-full py-3 bg-red-500 text-white rounded-xl font-bold text-lg action-btn">確定</button>
         </div>
     </div>
 
     <!-- Processing Overlay -->
-    <div id="loadingOverlay" class="fixed inset-0 hidden flex-col items-center justify-center z-[400] text-white">
-        <div class="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-4 shadow-lg"></div>
-        <div class="text-xl font-bold tracking-widest drop-shadow-md" id="loadingText">處理中...</div>
+    <div id="loadingOverlay" class="fixed inset-0 hidden flex-col items-center justify-center z-[200] text-white">
+        <div class="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+        <div class="text-xl font-bold tracking-widest" id="loadingText">處理中...</div>
     </div>
+
+</div><!-- /app-shell -->
 
     <script>
         // --- State ---
@@ -325,46 +478,23 @@
         let lastMousePos = { x: 0, y: 0 };
         let startAngle = 0, startScale = 1;
 
-        let canvas, ctx;
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
 
-        // 確保 DOM 完全載入後才初始化事件
-        document.addEventListener('DOMContentLoaded', () => {
-            canvas = document.getElementById('mainCanvas');
-            ctx = canvas.getContext('2d');
-            
+        window.onload = () => {
             renderFrameList();
             draw();
-            
-            // Mouse Events
             canvas.addEventListener('mousedown', onMouseDown);
-            window.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mousemove', onMouseMove);
             window.addEventListener('mouseup', onMouseUp);
-            
-            // Touch Events (確保 passive: false 阻止預設捲動)
-            canvas.addEventListener('touchstart', (e) => {
-                if(e.touches.length === 1) onMouseDown(e.touches[0]);
-            }, { passive: false });
-            window.addEventListener('touchmove', (e) => { 
-                if(isDragging || isResizing) {
-                    e.preventDefault(); 
-                    onMouseMove(e.touches[0]);
-                }
-            }, { passive: false });
+            canvas.addEventListener('touchstart', (e) => onMouseDown(e.touches[0]), { passive: false });
+            document.getElementById('textInput').addEventListener('input', () => { if(document.getElementById('textModal').style.display==='flex') updateTextPreview(); });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onMouseMove(e.touches[0]); }, { passive: false });
             window.addEventListener('touchend', onMouseUp);
-
-            document.getElementById('textInput').addEventListener('input', () => { 
-                if(document.getElementById('textModal').style.display === 'flex') updateTextPreview(); 
-            });
-
-            // 監聽視窗大小改變，重繪UI控點
-            window.addEventListener('resize', () => {
-                if(!isPreviewing) draw();
-            });
-        });
+        };
 
         // --- Core Drawing ---
         function draw(targetCtx = ctx, frameIndex = currentFrameIndex, isExport = false) {
-            if (!targetCtx) return;
             const currentCanvas = targetCtx.canvas;
             targetCtx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
             const frame = frames[frameIndex];
@@ -396,7 +526,7 @@
                     } else {
                         // multiline text
                         const fontSize = 40;
-                        targetCtx.font = "bold " + fontSize + "px Noto Sans TC, sans-serif";
+                        targetCtx.font = "bold " + fontSize + "px Noto Sans TC";
                         const lh = (obj.lineHeight || 1.4) * fontSize;
                         const lines = obj.content.split("\n");
                         const sw = (obj.strokeWidth !== undefined) ? obj.strokeWidth : 6;
@@ -416,14 +546,13 @@
                     targetCtx.drawImage(obj.img, -w/2, -h/2, w, h);
                 }
 
-                // 繪製 UI 控點 (僅在非預覽、非匯出、且被選中時)
+                // 只有在非導出模式且選中時才繪製 UI 控點
                 if (!isExport && index === selectedObjectIndex && !isPreviewing) {
-                    targetCtx.restore(); 
-                    targetCtx.save();
+                    targetCtx.restore(); targetCtx.save();
                     targetCtx.translate(obj.x, obj.y);
                     targetCtx.rotate(obj.rotation * Math.PI / 180);
                     
-                    // 計算縮放率以適應不同螢幕大小
+                    // 計算目前畫布在螢幕上的縮放率，確保控制點不會因為匯出尺寸變大而變太小
                     let dScale = 1;
                     const rect = targetCtx.canvas.getBoundingClientRect();
                     if(rect.width > 0) dScale = targetCtx.canvas.width / rect.width;
@@ -431,27 +560,24 @@
                     const halfW = (w / 2) * obj.scale + 10 * dScale;
                     const halfH = (h / 2) * obj.scale + 10 * dScale;
                     
-                    // 外框
                     targetCtx.strokeStyle = "#3B82F6";
                     targetCtx.setLineDash([5 * dScale, 5 * dScale]);
                     targetCtx.lineWidth = 2 * dScale;
                     targetCtx.strokeRect(-halfW, -halfH, halfW * 2, halfH * 2);
                     targetCtx.setLineDash([]);
                     
-                    // 旋轉縮放控制點 (右下角)
                     targetCtx.fillStyle = "white";
-                    targetCtx.shadowBlur = 4 * dScale;
-                    targetCtx.shadowColor = "rgba(0,0,0,0.4)";
+                    targetCtx.shadowBlur = 5 * dScale;
+                    targetCtx.shadowColor = "rgba(0,0,0,0.3)";
                     targetCtx.beginPath();
-                    targetCtx.arc(halfW, halfH, 18 * dScale, 0, Math.PI * 2);
+                    targetCtx.arc(halfW, halfH, 20 * dScale, 0, Math.PI * 2);
                     targetCtx.fill();
                     
                     targetCtx.strokeStyle = "#3B82F6";
-                    targetCtx.lineWidth = 2.5 * dScale;
+                    targetCtx.lineWidth = 3 * dScale;
                     targetCtx.stroke();
                     
                     targetCtx.fillStyle = "#3B82F6";
-                    targetCtx.shadowBlur = 0;
                     targetCtx.font = `bold ${16 * dScale}px Arial`;
                     targetCtx.fillText("🔄", halfW, halfH);
                 }
@@ -462,7 +588,6 @@
         // --- Interaction & Scaling ---
         function getScale() {
             const rect = canvas.getBoundingClientRect();
-            // 計算 CSS 尺寸與 Canvas 內部尺寸的比例
             const sw = rect.width > 0 ? canvas.width / rect.width : 1;
             const sh = rect.height > 0 ? canvas.height / rect.height : 1;
             return { scaleX: sw, scaleY: sh, rect };
@@ -485,89 +610,56 @@
                 const handleDistX = (w/2 * obj.scale + 10 * scaleX);
                 const handleDistY = (h/2 * obj.scale + 10 * scaleY);
                 const angleRad = obj.rotation * Math.PI / 180;
-                
                 const dx = x - obj.x, dy = y - obj.y;
                 const localX = dx * Math.cos(-angleRad) - dy * Math.sin(-angleRad);
                 const localY = dx * Math.sin(-angleRad) + dy * Math.cos(-angleRad);
                 
-                // 判斷是否點擊到控制點 (稍微放大感應區塊)
-                if (Math.sqrt((localX - handleDistX)**2 + (localY - handleDistY)**2) < 40 * scaleX) {
+                if (Math.sqrt((localX - handleDistX)**2 + (localY - handleDistY)**2) < 30 * scaleX) {
                     isResizing = true;
                     startAngle = obj.rotation - Math.atan2(dy, dx) * 180 / Math.PI;
-                    startScale = obj.scale / Math.max(1, Math.sqrt(dx*dx + dy*dy));
+                    startScale = obj.scale / Math.sqrt(dx*dx + dy*dy);
                     return;
                 }
             }
 
-            // 判斷是否點擊到物件
             let found = -1;
             for (let i = frames[currentFrameIndex].objects.length - 1; i >= 0; i--) {
                 const o = frames[currentFrameIndex].objects[i];
-                const boundSize = (o.type === 'image' ? Math.max(o.w, o.h) : 80);
-                if (Math.sqrt((x - o.x)**2 + (y - o.y)**2) < (boundSize/2 * o.scale) + 15 * scaleX) { 
-                    found = i; break; 
-                }
+                if (Math.sqrt((x - o.x)**2 + (y - o.y)**2) < 50 * o.scale * Math.max(scaleX, 1)) { found = i; break; }
             }
-            
             selectedObjectIndex = found;
             updateUIState();
-            if (found !== -1) { 
-                isDragging = true; 
-                lastMousePos = { x, y }; 
-            }
+            if (found !== -1) { isDragging = true; lastMousePos = { x, y }; }
             draw();
         }
 
         function onMouseMove(e) {
-            if (isPreviewing || (!isDragging && !isResizing)) return;
+            if (isPreviewing) return;
             const { scaleX, scaleY, rect } = getScale();
             const x = (e.clientX - rect.left) * scaleX;
             const y = (e.clientY - rect.top) * scaleY;
             const obj = frames[currentFrameIndex].objects[selectedObjectIndex];
             
             if (isDragging && obj) {
-                obj.x += (x - lastMousePos.x); 
-                obj.y += (y - lastMousePos.y);
-                lastMousePos = { x, y }; 
-                draw();
+                obj.x += (x - lastMousePos.x); obj.y += (y - lastMousePos.y);
+                lastMousePos = { x, y }; draw();
             } else if (isResizing && obj) {
                 const dx = x - obj.x, dy = y - obj.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                obj.scale = Math.max(0.1, dist * startScale);
+                obj.scale = Math.max(0.1, Math.sqrt(dx*dx + dy*dy) * startScale);
                 obj.rotation = startAngle + Math.atan2(dy, dx) * 180 / Math.PI;
                 draw();
             }
         }
 
-        function onMouseUp() { 
-            isDragging = false; 
-            isResizing = false; 
-        }
-
+        function onMouseUp() { isDragging = false; isResizing = false; }
         function updateUIState() {
             const delBtn = document.getElementById('deleteBtn');
-            const delText = document.getElementById('deleteBtnText');
             const flipBtns = document.getElementById('flipBtns');
             const hasObj = selectedObjectIndex !== -1;
-            
-            if (delBtn && delText) {
-                delBtn.disabled = !hasObj;
-                // 使用 add/remove 代替 replace，避免 class 狀態不一致報錯
-                if(hasObj) {
-                    delBtn.classList.remove('opacity-40');
-                    delBtn.classList.add('opacity-100', 'hover:bg-red-50', 'hover:border-red-200');
-                    delText.classList.remove('text-gray-600');
-                    delText.classList.add('text-red-600');
-                } else {
-                    delBtn.classList.remove('opacity-100', 'hover:bg-red-50', 'hover:border-red-200');
-                    delBtn.classList.add('opacity-40');
-                    delText.classList.remove('text-red-600');
-                    delText.classList.add('text-gray-600');
-                }
-            }
-
+            delBtn.disabled = !hasObj;
+            delBtn.style.opacity = hasObj ? "1" : "0.3";
             if (flipBtns) {
-                flipBtns.style.opacity = hasObj ? "1" : "0.4";
+                flipBtns.style.opacity = hasObj ? "1" : "0.3";
                 flipBtns.style.pointerEvents = hasObj ? "auto" : "none";
             }
         }
@@ -590,66 +682,69 @@
             frames.forEach((frame, index) => {
                 const isActive = index === currentFrameIndex;
                 const card = document.createElement('div');
-                card.className = `frame-card bg-white border-2 rounded-2xl flex flex-col items-center cursor-pointer relative shrink-0 ${isActive ? 'active border-blue-500' : 'border-gray-200 hover:border-gray-300'}`;
-                card.style.padding = '12px 10px';
+                card.className = `frame-card flex-shrink-0 bg-white border-4 rounded-2xl flex flex-col items-center cursor-pointer relative ${isActive ? 'active' : 'border-gray-200'}`;
+                card.style.cssText = 'min-width:120px;height:auto;padding:12px 10px 12px;gap:7px;';
                 card.onclick = () => selectFrame(index);
 
                 const numLabel = document.createElement('div');
-                numLabel.className = `text-lg font-bold mb-1 ${isActive ? 'text-blue-600' : 'text-gray-400'}`;
+                numLabel.style.cssText = `font-size:18px;font-weight:bold;color:${isActive ? '#EF4444' : '#9CA3AF'};`;
                 numLabel.innerText = `第 ${index + 1} 張`;
                 card.appendChild(numLabel);
 
                 const speedTitle = document.createElement('div');
-                speedTitle.className = 'text-xs text-gray-500 font-bold mb-1.5';
+                speedTitle.style.cssText = 'font-size:13px;color:#6B7280;font-weight:bold;';
                 speedTitle.innerText = '⏱ 顯示速度';
                 card.appendChild(speedTitle);
 
                 const speedRow = document.createElement('div');
-                speedRow.className = 'flex gap-1 mb-2 bg-gray-50 p-1 rounded-xl border border-gray-100';
+                speedRow.style.cssText = 'display:flex;gap:5px;';
                 speedRow.onclick = (e) => e.stopPropagation();
-                
                 const currentLabel = getSpeedLabel(frame.duration || 400);
                 SPEED_PRESETS.forEach(preset => {
                     const btn = document.createElement('button');
                     const isSel = preset.label === currentLabel;
                     btn.innerText = preset.label;
-                    btn.className = `text-sm font-bold py-1 px-2 rounded-lg transition-colors ${isSel ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`;
+                    btn.style.cssText = [
+                        'font-size:16px;font-weight:bold;',
+                        'padding:7px 10px;border-radius:10px;',
+                        `border:2px solid ${isSel ? '#3B82F6' : '#D1D5DB'};`,
+                        `background:${isSel ? '#3B82F6' : '#F3F4F6'};`,
+                        `color:${isSel ? 'white' : '#374151'};`,
+                        'cursor:pointer;min-width:38px;',
+                        isSel ? 'box-shadow:0 2px 8px rgba(59,130,246,0.35);' : '',
+                    ].join('');
                     btn.onclick = (e) => { e.stopPropagation(); frames[index].duration = preset.ms; renderFrameList(); };
                     speedRow.appendChild(btn);
                 });
                 card.appendChild(speedRow);
 
                 const dlBtn = document.createElement('button');
-                dlBtn.innerHTML = '⬇️ 下載單張';
-                dlBtn.className = 'w-full text-sm font-bold bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800 py-1.5 rounded-lg border border-green-200 transition-colors mt-auto';
+                dlBtn.innerHTML = '⬇️ 下載這張';
+                dlBtn.style.cssText = [
+                    'width:100%;margin-top:2px;',
+                    'font-size:15px;font-weight:bold;letter-spacing:0.5px;',
+                    'background:#10B981;color:white;',
+                    'border-radius:12px;padding:10px 4px;',
+                    'box-shadow:0 3px 8px rgba(16,185,129,0.35);',
+                ].join('');
                 dlBtn.onclick = (e) => { e.stopPropagation(); downloadFramePNG(index); };
                 card.appendChild(dlBtn);
 
                 if (isActive) {
                     const copyBtn = document.createElement('button');
                     copyBtn.innerHTML = '➕';
-                    copyBtn.title = '複製此步驟';
-                    copyBtn.className = 'absolute -top-3 -right-3 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md font-bold text-sm hover:scale-110 transition-transform border-2 border-white';
+                    copyBtn.className = 'absolute -top-3 -right-3 bg-blue-500 text-white rounded-full w-9 h-9 flex items-center justify-center shadow-lg font-bold text-lg';
                     copyBtn.onclick = (e) => { e.stopPropagation(); duplicateFrame(index); };
                     card.appendChild(copyBtn);
 
-                    if (frames.length > 1) {
-                        const delBtn2 = document.createElement('button');
-                        delBtn2.innerHTML = '✕';
-                        delBtn2.title = '刪除此步驟';
-                        delBtn2.className = 'absolute -bottom-3 -right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md text-sm font-bold hover:scale-110 transition-transform border-2 border-white';
-                        delBtn2.onclick = (e) => { e.stopPropagation(); deleteFrame(index); };
-                        card.appendChild(delBtn2);
-                    }
+                    const delBtn2 = document.createElement('button');
+                    delBtn2.innerHTML = '🗑️';
+                    delBtn2.className = 'absolute -bottom-3 -right-3 bg-red-500 text-white rounded-full w-9 h-9 flex items-center justify-center shadow-lg text-base';
+                    delBtn2.onclick = (e) => { e.stopPropagation(); deleteFrame(index); };
+                    card.appendChild(delBtn2);
                 }
                 list.appendChild(card);
             });
-            
-            // Auto scroll to active frame
-            const activeCard = list.querySelector('.frame-card.active');
-            if (activeCard) {
-                activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-            }
         }
 
         function selectFrame(index) {
@@ -657,23 +752,11 @@
             renderFrameList(); draw();
         }
 
-        function addFrame() { 
-            frames.push({ id: Date.now(), objects: [], duration: 400 }); 
-            selectFrame(frames.length - 1); 
-        }
+        function addFrame() { frames.push({ id: Date.now(), objects: [], duration: 400 }); selectFrame(frames.length - 1); }
 
         function duplicateFrame(index) {
-            // 【修復 Bug 2】深拷貝時 HTMLImageElement 無法被 JSON 序列化，需逐一重建
-            const srcObjs = frames[index].objects;
-            const newObjs = srcObjs.map(o => {
-                const copy = Object.assign({}, o); // 淺拷貝基本屬性
-                if (o.type === 'image') {
-                    // img 元素直接共用（唯讀，不會修改原始像素）
-                    copy.img = o.img;
-                    copy.src = o.src;
-                }
-                return copy;
-            });
+            const newObjs = JSON.parse(JSON.stringify(frames[index].objects));
+            newObjs.forEach((o, i) => { if(o.type === 'image') o.img = frames[index].objects[i].img; });
             frames.splice(index + 1, 0, { id: Date.now(), objects: newObjs, duration: frames[index].duration || 400 });
             selectFrame(index + 1);
         }
@@ -726,6 +809,7 @@
             if(newH > 2000) newH = 2000;
 
             if (newW > 1000 || newH > 1000) {
+                // 不阻擋，只提醒
                 showAlert('畫布尺寸過大，製作 GIF 時可能會較耗時，請耐心等候！', '💡');
             }
 
@@ -759,16 +843,16 @@
 
         // --- Sticker & Text Modals ---
         const STICKER_LIST = [
-            '❤️','💛','💚','💙','💜','🤍','💕','💖',
-            '🌟','✨','🔥','🎉','🎈','🎀','🎁','🌸',
-            '🌻','🍀','🌙','☀️','💦','💨','👍','✌️'
+            '❤️','🧡','💛','💚','💙','💜','🖤','🤍','💕','💖',
+            '🌟','⭐','✨','🌈','🌸','🌺','🌻','🍀','🎉','🎊',
+            '🎈','🎀','🎁','🔥','💫','🌙','☀️','❄️','🌊','🦋',
         ];
         function openStickerModal() {
             const grid = document.getElementById('stickerGrid');
             grid.innerHTML = '';
             STICKER_LIST.forEach(emoji => {
                 const btn = document.createElement('button');
-                btn.className = 'text-3xl p-2 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:scale-110 transition-transform cursor-pointer';
+                btn.style.cssText = 'font-size:36px;padding:8px;border-radius:14px;background:#F9FAFB;border:2px solid #E5E7EB;cursor:pointer;';
                 btn.innerText = emoji;
                 btn.onclick = () => { addSticker(emoji); closeStickerModal(); };
                 grid.appendChild(btn);
@@ -779,7 +863,7 @@
         
         function promptAddText() {
             document.getElementById('textModal').style.display = 'flex';
-            setTimeout(() => document.getElementById('textInput').focus(), 100);
+            document.getElementById('textInput').focus();
             updateStrokeWidthUI();
             updateLineHeightUI();
             updateTextPreview();
@@ -792,14 +876,8 @@
         function setStrokeColor(color) {
             tempStrokeColor = color;
             const preview = document.getElementById('strokeColorPreview');
-            if (color === 'none') { 
-                preview.style.background = '#F3F4F6'; 
-                preview.innerHTML = '<span class="text-gray-400 text-xs w-full h-full flex items-center justify-center">✕</span>'; 
-            }
-            else { 
-                preview.style.background = color; 
-                preview.innerHTML = ''; 
-            }
+            if (color === 'none') { preview.style.background = '#F3F4F6'; preview.innerHTML = '<span style="font-size:14px;line-height:32px;display:block;text-align:center;">✕</span>'; }
+            else { preview.style.background = color; preview.innerHTML = ''; }
             updateTextPreview();
         }
         function setStrokeWidth(w) {
@@ -817,7 +895,9 @@
                 const btn = document.getElementById('sw-' + v);
                 if (!btn) return;
                 const active = v === tempStrokeWidth;
-                btn.className = `flex-1 py-1.5 rounded-lg border-2 font-bold text-sm transition-colors ${active ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
+                btn.style.borderColor = active ? '#3B82F6' : '#E5E7EB';
+                btn.style.background  = active ? '#EFF6FF' : '#F9FAFB';
+                btn.style.color       = active ? '#2563EB' : '#6B7280';
             });
         }
         function updateLineHeightUI() {
@@ -826,7 +906,9 @@
                 if (!btn) return;
                 const val = v / 10;
                 const active = Math.abs(val - tempLineHeight) < 0.05;
-                btn.className = `flex-1 py-1.5 rounded-lg border-2 font-bold text-sm transition-colors ${active ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'}`;
+                btn.style.borderColor = active ? '#3B82F6' : '#E5E7EB';
+                btn.style.background  = active ? '#EFF6FF' : '#F9FAFB';
+                btn.style.color       = active ? '#2563EB' : '#6B7280';
             });
         }
         function updateTextPreview() {
@@ -837,7 +919,7 @@
             ctx.clearRect(0, 0, W, H);
             const rawText = document.getElementById('textInput').value || '預覽文字';
             const lines = rawText.split('\n');
-            const fontSize = 28;
+            const fontSize = 26;
             ctx.font = 'bold ' + fontSize + 'px Noto Sans TC, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -849,7 +931,7 @@
                 const y = startY + i * lh;
                 if (tempStrokeWidth > 0 && tempStrokeColor !== 'none') {
                     ctx.strokeStyle = tempStrokeColor;
-                    ctx.lineWidth = tempStrokeWidth * 0.6;
+                    ctx.lineWidth = tempStrokeWidth * 0.65;
                     ctx.strokeText(line, W / 2, y);
                 }
                 ctx.fillStyle = tempTextColor;
@@ -868,11 +950,9 @@
                     color: tempTextColor, strokeColor: tempStrokeColor,
                     strokeWidth: tempStrokeWidth, lineHeight: tempLineHeight
                 });
-                selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; 
-                updateUIState(); draw();
+                selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; updateUIState(); draw();
             }
-            document.getElementById('textInput').value = ''; 
-            closeTextModal();
+            document.getElementById('textInput').value = ''; closeTextModal();
         }
 
         function addSticker(emoji) {
@@ -881,60 +961,33 @@
                 x: canvasW / 2, y: canvasH / 2, 
                 scale: 1.5 * getBaseScale(), rotation: 0 
             });
-            selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; 
-            updateUIState(); draw();
+            selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; updateUIState(); draw();
         }
 
-        // --- 圖片上傳處理 ---
         function handleFileUpload(event) {
-            const fileInput = event.target;
-            const file = fileInput.files[0]; 
-            if (!file) return;
-            
-            // 檢查是否為圖片檔案
-            if (!file.type.startsWith('image/')) {
-                showAlert('請選擇有效的圖片檔案！', '⚠️');
-                fileInput.value = '';
-                return;
-            }
-
+            const file = event.target.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
-                const dataURL = e.target.result; // 【修復 Bug 1】先保存 dataURL，防止被 GC 回收
                 const img = new Image();
                 img.onload = () => {
+                    // 讓圖片預設保持原始尺寸。只有當圖片大於畫布時，才稍微縮小以塞進畫布內。
                     let ratio = 1;
                     if (img.width > canvasW || img.height > canvasH) {
                         ratio = Math.min(canvasW / img.width, canvasH / img.height);
                     }
                     
                     frames[currentFrameIndex].objects.push({ 
-                        type: 'image', 
-                        img,        // HTMLImageElement（用於繪製）
-                        src: dataURL, // 【修復 Bug 1 & 2】同時保存 dataURL，防止 GC 回收 img 以及複製 frame 時能重建
+                        type: 'image', img, 
                         w: img.width * ratio, h: img.height * ratio, 
                         x: canvasW / 2, y: canvasH / 2, 
-                        scale: 1, rotation: 0,
-                        flipH: false, flipV: false
+                        scale: 1, rotation: 0 
                     });
-                    selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; 
-                    updateUIState(); draw();
-                    // 清空 input 值要在 push 後才執行，確保物件已正確加入
-                    fileInput.value = ''; 
+                    selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; updateUIState(); draw();
                 };
-                img.onerror = () => {
-                    showAlert('圖片載入失敗，可能檔案格式不受支援！', '❌');
-                    fileInput.value = '';
-                };
-                img.src = dataURL; // 使用已保存的 dataURL
+                img.src = e.target.result;
             };
-            
-            reader.onerror = () => {
-                showAlert('讀取檔案時發生錯誤！', '❌');
-                fileInput.value = '';
-            };
-            
             reader.readAsDataURL(file);
+            event.target.value = ''; // 允許重複上傳相同檔案
         }
 
         function flipSelected(dir) {
@@ -953,21 +1006,16 @@
 
         // --- Preview ---
         function previewAnimation() {
-            const btn = document.getElementById('previewBtn');
             if (isPreviewing) {
                 clearTimeout(previewInterval); isPreviewing = false;
-                btn.innerHTML = "<span>▶️</span> <span>預覽播放</span>";
-                btn.classList.replace('bg-gray-800', 'bg-white');
-                btn.classList.replace('text-white', 'text-red-500');
-                currentFrameIndex = 0; // 【修復 Bug 4】停止後回到第一張
-                renderFrameList(); draw();
+                document.getElementById('previewBtn').innerText = "預覽播放";
+                document.getElementById('previewBtn').classList.remove('previewing');
+                draw();
             } else {
                 if (frames.length < 2) { showAlert('至少要兩個步驟喔！', '⚠️'); return; }
                 isPreviewing = true; selectedObjectIndex = -1; updateUIState();
-                btn.innerHTML = "<span>⏹️</span> <span>停止預覽</span>";
-                btn.classList.replace('bg-white', 'bg-gray-800');
-                btn.classList.replace('text-red-500', 'text-white');
-                
+                document.getElementById('previewBtn').innerText = "停止預覽";
+                document.getElementById('previewBtn').classList.add('previewing');
                 let pIndex = 0;
                 function playNextFrame() {
                     if (!isPreviewing) return;
@@ -999,28 +1047,12 @@
             }, 'image/png');
         }
 
-        // --- 修復：解決 GitHub Pages 上匯出 GIF 的 CORS Worker 限制 ---
         async function exportGIF() {
             if (frames.length < 2) { showAlert('請至少製作 2 個步驟再儲存喔！', '⚠️'); return; }
-            if (isPreviewing) previewAnimation(); // Stop preview if running
-
             const overlay = document.getElementById('loadingOverlay');
             overlay.style.display = 'flex';
-            document.getElementById('loadingText').innerText = '正在準備引擎資源...';
-            
-            await new Promise(r => setTimeout(r, 50));
-            let workerUrl = null;
-
+            document.getElementById('loadingText').innerText = '正在製作 GIF，請稍候...';
             try {
-                // 將 Worker 轉換成 Blob 網址，繞開跨網域限制
-                const workerRes = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
-                if (!workerRes.ok) throw new Error("無法取得 GIF 引擎。");
-                const workerBlob = await workerRes.blob();
-                workerUrl = URL.createObjectURL(workerBlob);
-
-                document.getElementById('loadingText').innerText = '正在製作 GIF，請稍候...';
-                await new Promise(r => setTimeout(r, 50));
-
                 const W = canvasW, H = canvasH;
                 const TRANSPARENT_KEY = 0x00FE00;
 
@@ -1039,7 +1071,6 @@
                     height: H,
                     transparent: TRANSPARENT_KEY,
                     background: TRANSPARENT_KEY,
-                    workerScript: workerUrl
                 });
 
                 for (let i = 0; i < frames.length; i++) {
@@ -1060,24 +1091,16 @@
                     gif.addFrame(keyCtx, { delay: frames[i].duration || 400, copy: true });
                 }
 
-                const blob = await new Promise((resolve, reject) => { 
-                    gif.on('finished', b => resolve(b)); 
-                    gif.on('abort', () => reject(new Error('GIF generation aborted')));
-                    gif.render(); 
-                });
-
+                const blob = await new Promise(resolve => { gif.on('finished', b => resolve(b)); gif.render(); });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url; a.download = `sticker_${canvasW}x${canvasH}_${Date.now()}.gif`;
                 document.body.appendChild(a); a.click();
                 document.body.removeChild(a); URL.revokeObjectURL(url);
-                
                 showAlert('GIF 製作完成！\n已開始下載', '🎉');
             } catch(err) {
-                console.error(err); 
-                showAlert('製作過程中發生錯誤，\n請再試一次。', '😢');
+                console.error(err); showAlert('製作過程中發生錯誤，\n請再試一次。', '😢');
             } finally {
-                if (workerUrl) URL.revokeObjectURL(workerUrl);
                 overlay.style.display = 'none';
             }
         }
