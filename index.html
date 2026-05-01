@@ -24,9 +24,9 @@
         }
 
         .frame-card.active {
-            border-color: #EF4444;
+            border-color: #3B82F6;
             transform: translateY(-4px);
-            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
         }
 
         .action-btn:active {
@@ -178,7 +178,7 @@
     <!-- =============== Modals (彈出視窗) =============== -->
 
     <!-- Size Setting Modal -->
-    <div id="sizeModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-[130] backdrop-blur-sm">
+    <div id="sizeModal" class="fixed inset-0 bg-black/60 items-center justify-center p-4 z-[130] backdrop-blur-sm" style="display:none">
         <div class="bg-white rounded-3xl p-6 shadow-2xl w-full max-w-[340px] transform transition-transform">
             <h3 class="text-xl font-bold mb-4 text-center">⚙️ 設定畫布與下載尺寸</h3>
             <div class="flex items-center gap-3 mb-5">
@@ -205,7 +205,7 @@
     </div>
 
     <!-- Sticker Picker Modal -->
-    <div id="stickerModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-[120] backdrop-blur-sm">
+    <div id="stickerModal" class="fixed inset-0 bg-black/60 items-center justify-center p-4 z-[120] backdrop-blur-sm" style="display:none">
         <div class="bg-white w-full max-w-[400px] rounded-3xl p-6 shadow-2xl">
             <h3 class="text-2xl font-bold mb-4 text-center">選一個小物件 🎉</h3>
             <div class="grid grid-cols-6 gap-2 mb-5" id="stickerGrid"></div>
@@ -214,7 +214,7 @@
     </div>
 
     <!-- Text Modal -->
-    <div id="textModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-[120] backdrop-blur-sm">
+    <div id="textModal" class="fixed inset-0 bg-black/60 items-center justify-center p-4 z-[120] backdrop-blur-sm" style="display:none">
         <div class="bg-white rounded-3xl p-5 shadow-2xl w-full max-w-[320px] max-h-[90vh] overflow-y-auto custom-scrollbar">
             <h3 class="text-xl font-bold mb-3 flex items-center gap-2"><span>✍️</span> 寫文字</h3>
 
@@ -291,7 +291,7 @@
     </div>
 
     <!-- Custom Alert Modal -->
-    <div id="alertModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[300] p-4 backdrop-blur-sm">
+    <div id="alertModal" class="fixed inset-0 bg-black/50 items-center justify-center z-[300] p-4 backdrop-blur-sm" style="display:none">
         <div class="bg-white rounded-3xl p-6 shadow-2xl text-center w-full max-w-[280px] transform transition-transform">
             <div id="alertIcon" class="text-5xl mb-3">💬</div>
             <div id="alertMsg" class="text-lg font-bold text-gray-800 mb-6 leading-relaxed"></div>
@@ -663,8 +663,17 @@
         }
 
         function duplicateFrame(index) {
-            const newObjs = JSON.parse(JSON.stringify(frames[index].objects));
-            newObjs.forEach((o, i) => { if(o.type === 'image') o.img = frames[index].objects[i].img; });
+            // 【修復 Bug 2】深拷貝時 HTMLImageElement 無法被 JSON 序列化，需逐一重建
+            const srcObjs = frames[index].objects;
+            const newObjs = srcObjs.map(o => {
+                const copy = Object.assign({}, o); // 淺拷貝基本屬性
+                if (o.type === 'image') {
+                    // img 元素直接共用（唯讀，不會修改原始像素）
+                    copy.img = o.img;
+                    copy.src = o.src;
+                }
+                return copy;
+            });
             frames.splice(index + 1, 0, { id: Date.now(), objects: newObjs, duration: frames[index].duration || 400 });
             selectFrame(index + 1);
         }
@@ -876,7 +885,7 @@
             updateUIState(); draw();
         }
 
-        // --- 修復：圖片上傳處理邏輯加入防呆與錯誤追蹤 ---
+        // --- 圖片上傳處理 ---
         function handleFileUpload(event) {
             const fileInput = event.target;
             const file = fileInput.files[0]; 
@@ -891,6 +900,7 @@
 
             const reader = new FileReader();
             reader.onload = (e) => {
+                const dataURL = e.target.result; // 【修復 Bug 1】先保存 dataURL，防止被 GC 回收
                 const img = new Image();
                 img.onload = () => {
                     let ratio = 1;
@@ -899,7 +909,9 @@
                     }
                     
                     frames[currentFrameIndex].objects.push({ 
-                        type: 'image', img, 
+                        type: 'image', 
+                        img,        // HTMLImageElement（用於繪製）
+                        src: dataURL, // 【修復 Bug 1 & 2】同時保存 dataURL，防止 GC 回收 img 以及複製 frame 時能重建
                         w: img.width * ratio, h: img.height * ratio, 
                         x: canvasW / 2, y: canvasH / 2, 
                         scale: 1, rotation: 0,
@@ -907,16 +919,14 @@
                     });
                     selectedObjectIndex = frames[currentFrameIndex].objects.length - 1; 
                     updateUIState(); draw();
-                    
-                    // 【關鍵修正】確保圖片完全載入並畫到畫布上後，才清空 input 值
-                    // 這樣就不會觸發手機瀏覽器的「中斷讀取」保護機制
+                    // 清空 input 值要在 push 後才執行，確保物件已正確加入
                     fileInput.value = ''; 
                 };
                 img.onerror = () => {
                     showAlert('圖片載入失敗，可能檔案格式不受支援！', '❌');
                     fileInput.value = '';
                 };
-                img.src = e.target.result;
+                img.src = dataURL; // 使用已保存的 dataURL
             };
             
             reader.onerror = () => {
@@ -924,7 +934,6 @@
                 fileInput.value = '';
             };
             
-            // 開始讀取檔案
             reader.readAsDataURL(file);
         }
 
@@ -950,7 +959,8 @@
                 btn.innerHTML = "<span>▶️</span> <span>預覽播放</span>";
                 btn.classList.replace('bg-gray-800', 'bg-white');
                 btn.classList.replace('text-white', 'text-red-500');
-                draw();
+                currentFrameIndex = 0; // 【修復 Bug 4】停止後回到第一張
+                renderFrameList(); draw();
             } else {
                 if (frames.length < 2) { showAlert('至少要兩個步驟喔！', '⚠️'); return; }
                 isPreviewing = true; selectedObjectIndex = -1; updateUIState();
