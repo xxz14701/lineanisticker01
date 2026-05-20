@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <link rel="shortcut icon" href="01.png">
     <title>動態圖製作</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,9 +20,8 @@
         body {
             font-family: 'Noto Sans TC', sans-serif;
             background: #E8EAED;
-            overscroll-behavior: none;
-            user-select: none;
             min-height: 100vh;
+            min-height: 100dvh; /* 修正 iPhone 工具列高度計算 */
         }
 
         /* ── App Shell ── */
@@ -30,17 +29,19 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            min-height: 100dvh;
             max-width: 100vw;
         }
 
         /* ── Desktop two-column layout ── */
         @media (min-width: 900px) {
             body { background: #D1D5DB; }
-            #app-shell { max-width: 960px; margin: 0 auto; min-height: 100vh; background: white; }
+            #app-shell { max-width: 960px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; background: white; }
             #main-body {
                 display: grid;
                 grid-template-columns: 420px 1fr;
                 height: calc(100vh - 56px);
+                height: calc(100dvh - 56px);
                 overflow: hidden;
             }
             /* 左欄：畫布，sticky，不捲動 */
@@ -93,8 +94,14 @@
 
         /* ── Mobile: single column ── */
         @media (max-width: 899px) {
-            #app-shell { background: white; box-shadow: none; }
-            #main-body { display: flex; flex-direction: column; padding-bottom: 90px; }
+            #app-shell { background: white; box-shadow: none; min-height: 100vh; min-height: 100dvh; }
+            #main-body { 
+                display: flex; 
+                flex-direction: column; 
+                flex: 1;
+                /* 預留底部固定按鈕的高度空間，防止內容被遮擋 */
+                padding-bottom: calc(90px + env(safe-area-inset-bottom)); 
+            }
             #canvas-col { padding: 12px 12px 8px; background: #F9FAFB; border-bottom: 1px solid #E5E7EB; }
             #controls-col { padding: 0; display: flex; flex-direction: column; }
             #controls-scrollable { padding: 0; display: flex; flex-direction: column; }
@@ -258,18 +265,14 @@
 
 <div id="app-shell" class="bg-white shadow-2xl">
 
-    <!-- Header -->
     <header id="app-header">
         <h1>🎞 動態圖製作</h1>
         <button onclick="previewAnimation()" id="previewBtn" class="action-btn">預覽播放</button>
     </header>
 
-    <!-- Main Body (2-col on desktop, 1-col on mobile) -->
     <div id="main-body">
 
-        <!-- LEFT: Canvas Column -->
         <div id="canvas-col">
-            <!-- Toolbar row -->
             <div class="toolbar-row">
                 <div class="canvas-hint">💡 拖移物件，按<span style="color:#3B82F6;font-weight:700;">藍圈</span>旋轉縮放</div>
                 <button onclick="openSizeModal()" class="action-btn" style="font-size:0.78rem;font-weight:700;color:#374151;background:white;border:1.5px solid #D1D5DB;padding:5px 12px;border-radius:999px;box-shadow:0 1px 3px rgba(0,0,0,0.07);display:flex;align-items:center;gap:4px;">
@@ -277,7 +280,6 @@
                 </button>
             </div>
 
-            <!-- Canvas -->
             <div style="width:100%;">
                 <div id="canvasBox" style="width:100%;aspect-ratio:370/320;background:white;border:3px solid #E5E7EB;">
                     <canvas id="mainCanvas" width="370" height="320" style="width:100%;height:100%;display:block;"></canvas>
@@ -285,12 +287,10 @@
             </div>
         </div>
 
-        <!-- RIGHT: Controls Column -->
         <div id="controls-col">
 
           <div id="controls-scrollable">
 
-            <!-- Timeline Section -->
             <div id="timeline-section">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <span class="section-label" style="margin-bottom:0;">🎬 動畫步驟</span>
@@ -299,19 +299,16 @@
                 <div id="frameList" class="no-scrollbar" style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;"></div>
             </div>
 
-            <!-- Controls Section -->
             <div id="controls-section">
                 <div class="section-label">🛠 新增素材</div>
                 <div id="panel-add" style="display:flex;flex-direction:column;gap:10px;">
                     
-                    <!-- 挑選圖片 -->
                     <button onclick="document.getElementById('fileInput').click()" class="action-btn ctrl-btn-lg" style="background:#F0FDF4;border-color:#86EFAC;color:#15803D;">
                         <span style="font-size:1.6rem;">🖼️</span>
                         <span>挑選圖片</span>
                         <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFileUpload(event)">
                     </button>
 
-                    <!-- 寫文字 + 加小物件 -->
                     <div class="ctrl-grid-2">
                         <button onclick="promptAddText()" class="action-btn ctrl-btn-sm" style="background:#FEFCE8;border-color:#FDE047;color:#713F12;">
                             <span style="font-size:1.6rem;">✍️</span>
@@ -323,7 +320,6 @@
                         </button>
                     </div>
 
-                    <!-- 翻轉 -->
                     <div id="flipBtns" class="ctrl-grid-2" style="opacity:0.3;pointer-events:none;transition:opacity 0.2s;">
                         <button onclick="flipSelected('H')" class="action-btn ctrl-btn-sm" style="background:#EFF6FF;border-color:#BFDBFE;color:#1D4ED8;">
                             <span style="font-size:1.4rem;">↔️</span>
@@ -335,7 +331,6 @@
                         </button>
                     </div>
 
-                    <!-- 刪除 -->
                     <button onclick="deleteSelected()" id="deleteBtn" class="action-btn ctrl-btn-lg" style="background:#F9FAFB;border-color:#E5E7EB;color:#374151;opacity:0.3;transition:opacity 0.2s;" disabled>
                         <span style="font-size:1.4rem;">🗑️</span>
                         <span>刪除選中的物件</span>
@@ -343,10 +338,7 @@
                 </div>
             </div>
 
-          </div><!-- /controls-scrollable -->
-
-            <!-- Export Button (固定在底部) -->
-            <div id="export-btn-wrap">
+          </div><div id="export-btn-wrap">
                 <button onclick="exportGIF()" class="action-btn" style="width:100%;padding:14px;background:#EF4444;color:white;border-radius:14px;font-weight:700;font-size:1rem;box-shadow:0 4px 14px rgba(239,68,68,0.3);">
                     🎁 製作完成（存成 GIF）
                 </button>
@@ -355,11 +347,7 @@
                 </p>
             </div>
 
-        </div><!-- /controls-col -->
-    </div><!-- /main-body -->
-
-    <!-- Size Setting Modal -->
-    <div id="sizeModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-[130]">
+        </div></div><div id="sizeModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-[130]">
         <div class="bg-white rounded-3xl p-6 shadow-2xl w-full" style="max-width:320px;">
                 <h3 class="text-xl font-bold mb-4 text-center">⚙️ 設定畫布與下載尺寸</h3>
                 <div class="flex items-center gap-2 mb-5">
@@ -385,7 +373,6 @@
         </div>
     </div>
 
-    <!-- Sticker Picker Modal -->
     <div id="stickerModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-6 z-[120]">
         <div class="bg-white w-full rounded-3xl p-6 shadow-2xl" style="max-width:380px;">
             <h3 class="text-2xl font-bold mb-4 text-center">選一個小物件 🎉</h3>
@@ -394,15 +381,12 @@
         </div>
     </div>
 
-    <!-- Text Modal -->
     <div id="textModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-[120]">
         <div class="bg-white rounded-3xl p-5 shadow-2xl" style="width:300px;max-height:92vh;overflow-y:auto;">
                 <h3 class="text-xl font-bold mb-3">✍️ 寫文字</h3>
 
-                <!-- 多行文字輸入 -->
                 <textarea id="textInput" rows="3" class="w-full border-2 border-gray-300 p-3 rounded-xl text-xl mb-1 block resize-none" placeholder="可輸入多行文字&#10;例如：早安&#10;新的一天"></textarea>
 
-                <!-- 行距 -->
                 <div class="flex items-center gap-2 mb-4">
                     <span class="text-sm font-bold text-gray-500 whitespace-nowrap">行距</span>
                     <div class="flex gap-1 flex-1">
@@ -413,7 +397,6 @@
                     </div>
                 </div>
 
-                <!-- 文字顏色 -->
                 <div class="text-sm font-bold text-gray-500 mb-1">🖊 文字顏色</div>
                 <div class="flex flex-wrap gap-2 items-center mb-3">
                     <button onclick="setTextColor('#EF4444')" class="w-9 h-9 rounded-full bg-red-500 border-4 border-white shadow"></button>
@@ -430,7 +413,6 @@
                     <div id="colorPreview" class="w-9 h-9 rounded-full border-2 border-gray-300 shadow" style="background:#EF4444"></div>
                 </div>
 
-                <!-- 框線顏色 -->
                 <div class="border-t border-gray-100 mb-3"></div>
                 <div class="text-sm font-bold text-gray-500 mb-1">🔲 框線顏色</div>
                 <div class="flex flex-wrap gap-2 items-center mb-3">
@@ -448,7 +430,6 @@
                     <div id="strokeColorPreview" class="w-9 h-9 rounded-full border-2 border-gray-300 shadow" style="background:#FFFFFF"></div>
                 </div>
 
-                <!-- 框線粗細 -->
                 <div class="text-sm font-bold text-gray-500 mb-1">📏 框線粗細</div>
                 <div class="flex gap-1 mb-4">
                     <button onclick="setStrokeWidth(0)"  id="sw-0"  class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-500 text-sm">無</button>
@@ -458,18 +439,15 @@
                     <button onclick="setStrokeWidth(20)" id="sw-20" class="flex-1 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 font-bold text-gray-600 text-sm">超粗</button>
                 </div>
 
-                <!-- 即時預覽 -->
                 <div class="mb-4 bg-gray-100 rounded-2xl overflow-hidden flex items-center justify-center" style="min-height:72px;">
                     <canvas id="textPreviewCanvas" width="240" height="68" style="display:block;max-width:100%;"></canvas>
                 </div>
 
-                <!-- 按鈕：上下排列 -->
                 <button onclick="confirmAddText()" class="w-full py-3 mb-2 bg-red-500 text-white rounded-xl font-bold text-lg action-btn">確定加入</button>
                 <button onclick="closeTextModal()" class="w-full py-3 bg-gray-200 rounded-xl font-bold text-lg text-gray-600 action-btn">取消</button>
         </div>
     </div>
 
-    <!-- Custom Alert Modal -->
     <div id="alertModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-[300] p-6">
         <div class="bg-white rounded-3xl p-6 shadow-2xl text-center" style="max-width:280px;width:100%;">
             <div id="alertIcon" class="text-5xl mb-3">💬</div>
@@ -478,15 +456,12 @@
         </div>
     </div>
 
-    <!-- Processing Overlay -->
     <div id="loadingOverlay" class="fixed inset-0 hidden flex-col items-center justify-center z-[200] text-white">
         <div class="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
         <div class="text-xl font-bold tracking-widest" id="loadingText">處理中...</div>
     </div>
 
-</div><!-- /app-shell -->
-
-    <script>
+</div><script>
         // --- State ---
         let frames = [{ id: Date.now(), objects: [], duration: 400 }];
         let currentFrameIndex = 0;
