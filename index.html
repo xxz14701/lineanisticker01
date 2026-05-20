@@ -21,7 +21,7 @@
             font-family: 'Noto Sans TC', sans-serif;
             background: #E8EAED;
             min-height: 100vh;
-            min-height: 100dvh; /* 修正 iPhone 工具列高度計算 */
+            min-height: 100dvh;
         }
 
         /* ── App Shell ── */
@@ -83,7 +83,7 @@
                 box-shadow: 0 1px 4px rgba(0,0,0,0.07);
                 padding: 14px;
             }
-            /* 下載按鈕固定在右欄底部 */
+            /* 桌機版依舊讓按鈕固定在右欄底部，方便操作 */
             #export-btn-wrap {
                 padding: 12px 16px;
                 border-top: 1px solid #E5E7EB;
@@ -99,25 +99,32 @@
                 display: flex; 
                 flex-direction: column; 
                 flex: 1;
-                /* 預留底部固定按鈕的高度空間，防止內容被遮擋 */
-                padding-bottom: calc(90px + env(safe-area-inset-bottom)); 
             }
             #canvas-col { padding: 12px 12px 8px; background: #F9FAFB; border-bottom: 1px solid #E5E7EB; }
-            #controls-col { padding: 0; display: flex; flex-direction: column; }
-            #controls-scrollable { padding: 0; display: flex; flex-direction: column; }
-            #timeline-section { border-top: 1px solid #E5E7EB; padding: 12px 16px 16px; }
-            #controls-section { border-top: 1px solid #E5E7EB; padding: 16px; }
-            /* 手機：固定在螢幕底部 */
-            #export-btn-wrap {
-                position: fixed;
-                bottom: 0; left: 0; right: 0;
-                padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+            #controls-col { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+            #controls-scrollable { display: flex; flex-direction: column; gap: 12px; }
+            #timeline-section { 
+                border: 1px solid #E5E7EB; 
+                padding: 14px; 
+                border-radius: 14px; 
                 background: white;
-                border-top: 1px solid #E5E7EB;
-                box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
-                z-index: 40;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);
             }
-            #export-btn-wrap p { display: none; }
+            #controls-section { 
+                border: 1px solid #E5E7EB; 
+                padding: 14px; 
+                border-radius: 14px; 
+                background: white;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+            }
+            /* 手機版：取消 fixed 固定，改為隨網頁正常排列在最下方 */
+            #export-btn-wrap {
+                margin-top: 8px;
+                padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+                background: transparent;
+                border-top: none;
+                box-shadow: none;
+            }
         }
 
         /* ── Header ── */
@@ -185,7 +192,7 @@
             transition: transform 0.08s;
         }
 
-        /* ── Control Buttons (add image, text, sticker, flip) ── */
+        /* ── Control Buttons ── */
         .ctrl-btn-lg {
             display: flex;
             align-items: center;
@@ -338,7 +345,7 @@
                 </div>
             </div>
 
-          </div><div id="export-btn-wrap">
+            <div id="export-btn-wrap">
                 <button onclick="exportGIF()" class="action-btn" style="width:100%;padding:14px;background:#EF4444;color:white;border-radius:14px;font-weight:700;font-size:1rem;box-shadow:0 4px 14px rgba(239,68,68,0.3);">
                     🎁 製作完成（存成 GIF）
                 </button>
@@ -347,7 +354,7 @@
                 </p>
             </div>
 
-        </div></div><div id="sizeModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-[130]">
+          </div></div></div><div id="sizeModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-[130]">
         <div class="bg-white rounded-3xl p-6 shadow-2xl w-full" style="max-width:320px;">
                 <h3 class="text-xl font-bold mb-4 text-center">⚙️ 設定畫布與下載尺寸</h3>
                 <div class="flex items-center gap-2 mb-5">
@@ -384,8 +391,7 @@
     <div id="textModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-[120]">
         <div class="bg-white rounded-3xl p-5 shadow-2xl" style="width:300px;max-height:92vh;overflow-y:auto;">
                 <h3 class="text-xl font-bold mb-3">✍️ 寫文字</h3>
-
-                <textarea id="textInput" rows="3" class="w-full border-2 border-gray-300 p-3 rounded-xl text-xl mb-1 block resize-none" placeholder="可輸入多行文字&#10;例如：早安&#10;新的一天"></textarea>
+                <textarea id="textInput" rows="3" class="w-full border-2 border-gray-300 p-3 rounded-xl text-xl mb-1 block resize-none" placeholder="可輸入多行文字"></textarea>
 
                 <div class="flex items-center gap-2 mb-4">
                     <span class="text-sm font-bold text-gray-500 whitespace-nowrap">行距</span>
@@ -406,7 +412,7 @@
                     <button onclick="setTextColor('#8B5CF6')" class="w-9 h-9 rounded-full bg-purple-500 border-4 border-white shadow"></button>
                     <button onclick="setTextColor('#000000')" class="w-9 h-9 rounded-full bg-black border-4 border-white shadow"></button>
                     <button onclick="setTextColor('#FFFFFF')" class="w-9 h-9 rounded-full bg-white border-4 border-gray-300 shadow"></button>
-                    <label class="w-9 h-9 rounded-full border-4 border-dashed border-gray-400 flex items-center justify-center cursor-pointer relative overflow-hidden shadow" title="自訂">
+                    <label class="w-9 h-9 rounded-full border-4 border-dashed border-gray-400 flex items-center justify-center cursor-pointer relative overflow-hidden shadow">
                         <span>🎨</span>
                         <input type="color" id="customColorInput" onchange="setTextColor(this.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
                     </label>
@@ -422,8 +428,8 @@
                     <button onclick="setStrokeColor('#3B82F6')" class="w-9 h-9 rounded-full bg-blue-500 border-4 border-white shadow"></button>
                     <button onclick="setStrokeColor('#F59E0B')" class="w-9 h-9 rounded-full bg-yellow-500 border-4 border-white shadow"></button>
                     <button onclick="setStrokeColor('#10B981')" class="w-9 h-9 rounded-full bg-green-500 border-4 border-white shadow"></button>
-                    <button onclick="setStrokeColor('none')" class="w-9 h-9 rounded-full border-4 border-dashed border-gray-400 flex items-center justify-center shadow bg-gray-50 font-bold text-gray-500" title="無框線">✕</button>
-                    <label class="w-9 h-9 rounded-full border-4 border-dashed border-blue-300 flex items-center justify-center cursor-pointer relative overflow-hidden shadow" title="自訂">
+                    <button onclick="setStrokeColor('none')" class="w-9 h-9 rounded-full border-4 border-dashed border-gray-400 flex items-center justify-center shadow bg-gray-50 font-bold text-gray-500">✕</button>
+                    <label class="w-9 h-9 rounded-full border-4 border-dashed border-blue-300 flex items-center justify-center cursor-pointer relative overflow-hidden shadow">
                         <span>🎨</span>
                         <input type="color" id="customStrokeInput" onchange="setStrokeColor(this.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
                     </label>
@@ -473,7 +479,6 @@
         let tempStrokeWidth = 6;
         let tempLineHeight = 1.4;
 
-        // Canvas / Export Dimensions
         let canvasW = 370;
         let canvasH = 320;
 
@@ -527,7 +532,6 @@
                         targetCtx.fillStyle = obj.color || "black";
                         targetCtx.fillText(obj.content, 0, 0);
                     } else {
-                        // multiline text
                         const fontSize = 40;
                         targetCtx.font = "bold " + fontSize + "px Noto Sans TC";
                         const lh = (obj.lineHeight || 1.4) * fontSize;
@@ -549,13 +553,11 @@
                     targetCtx.drawImage(obj.img, -w/2, -h/2, w, h);
                 }
 
-                // 只有在非導出模式且選中時才繪製 UI 控點
                 if (!isExport && index === selectedObjectIndex && !isPreviewing) {
                     targetCtx.restore(); targetCtx.save();
                     targetCtx.translate(obj.x, obj.y);
                     targetCtx.rotate(obj.rotation * Math.PI / 180);
                     
-                    // 計算目前畫布在螢幕上的縮放率，確保控制點不會因為匯出尺寸變大而變太小
                     let dScale = 1;
                     const rect = targetCtx.canvas.getBoundingClientRect();
                     if(rect.width > 0) dScale = targetCtx.canvas.width / rect.width;
@@ -812,7 +814,6 @@
             if(newH > 2000) newH = 2000;
 
             if (newW > 1000 || newH > 1000) {
-                // 不阻擋，只提醒
                 showAlert('畫布尺寸過大，製作 GIF 時可能會較耗時，請耐心等候！', '💡');
             }
 
@@ -821,13 +822,11 @@
             canvasW = newW;
             canvasH = newH;
 
-            // Update Canvas Dimensions
             canvas.width = canvasW;
             canvas.height = canvasH;
             document.getElementById('canvasBox').style.aspectRatio = `${canvasW} / ${canvasH}`;
             document.getElementById('canvasSizeDisplay').innerText = `${canvasW}x${canvasH}`;
 
-            // 比例縮放現有物件，防跑版
             const scaleX = canvasW / oldW;
             const scaleY = canvasH / oldH;
             const scaleMin = Math.min(scaleX, scaleY);
@@ -973,12 +972,10 @@
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    // 讓圖片預設保持原始尺寸。只有當圖片大於畫布時，才稍微縮小以塞進畫布內。
                     let ratio = 1;
                     if (img.width > canvasW || img.height > canvasH) {
                         ratio = Math.min(canvasW / img.width, canvasH / img.height);
                     }
-                    
                     frames[currentFrameIndex].objects.push({ 
                         type: 'image', img, 
                         w: img.width * ratio, h: img.height * ratio, 
@@ -990,7 +987,7 @@
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
-            event.target.value = ''; // 允許重複上傳相同檔案
+            event.target.value = '';
         }
 
         function flipSelected(dir) {
@@ -1084,9 +1081,9 @@
                     const d = imgData.data;
                     for (let p = 0; p < d.length; p += 4) {
                         if (d[p + 3] < 10) {
-                            d[p]     = (TRANSPARENT_KEY >> 16) & 0xFF; // R = 0
-                            d[p + 1] = (TRANSPARENT_KEY >> 8)  & 0xFF; // G = 254
-                            d[p + 2] =  TRANSPARENT_KEY        & 0xFF; // B = 0
+                            d[p]     = (TRANSPARENT_KEY >> 16) & 0xFF;
+                            d[p + 1] = (TRANSPARENT_KEY >> 8)  & 0xFF;
+                            d[p + 2] =  TRANSPARENT_KEY        & 0xFF;
                             d[p + 3] = 255;
                         }
                     }
